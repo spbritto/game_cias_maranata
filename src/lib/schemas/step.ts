@@ -23,20 +23,20 @@ export type StepType = (typeof STEP_TYPES)[number];
 /** Rotulos em pt-BR usados no editor. */
 export const STEP_TYPE_LABELS: Record<StepType, string> = {
   choice: "Escolha",
-  scenario: "Situacao do cotidiano",
+  scenario: "Situação do cotidiano",
   true_false: "Verdadeiro ou falso",
-  reflection: "Reflexao pessoal",
-  verse: "Versiculo",
+  reflection: "Reflexão pessoal",
+  verse: "Versículo",
   open_question: "Pergunta aberta",
 };
 
 export const STEP_TYPE_HINTS: Record<StepType, string> = {
-  choice: "Situacao com alternativas. Cada alternativa revela sua propria reflexao.",
-  scenario: "Cenario proximo da realidade do adolescente, para gerar conversa.",
-  true_false: "Pergunta rapida para quebrar o ritmo e verificar entendimento.",
+  choice: "Situação com alternativas. Cada alternativa revela sua própria reflexão.",
+  scenario: "Cenário próximo da realidade do adolescente, para gerar conversa.",
+  true_false: "Pergunta rápida para quebrar o ritmo e verificar entendimento.",
   reflection: "Pergunta pessoal sem resposta certa.",
-  verse: "Texto biblico com um comentario seu.",
-  open_question: "O adolescente escreve a propria resposta.",
+  verse: "Texto bíblico com um comentário seu.",
+  open_question: "O adolescente escreve a própria resposta.",
 };
 
 // --- blocos reutilizaveis -------------------------------------------------
@@ -175,7 +175,7 @@ export type OpenQuestionStepData = z.infer<typeof openQuestionStepSchema>;
 
 /** Secao 11 do descritivo. O `diagram` e a representacao visual em cascata. */
 export const conclusionSchema = z.object({
-  title: shortText.default("Missao concluida"),
+  title: shortText.default("Missão concluída"),
   message: longText,
   /** Ex.: ["CRIADOR", "IDENTIDADE", "PROPOSITO", "VIDA"] */
   diagram: z.array(shortText).max(6).optional(),

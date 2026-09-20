@@ -21,11 +21,11 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "Missoes",
-    template: "%s · Missoes",
+    default: "Missões",
+    template: "%s · Missões",
   },
   description:
-    "Aulas cristas com adolescentes que viram jornada: situacoes, escolhas e reflexao a partir da Biblia.",
+    "Aulas cristãs com adolescentes que viram jornada: situações, escolhas e reflexão a partir da Bíblia.",
 };
 
 export const viewport: Viewport = {
