@@ -247,9 +247,9 @@ Ordenadas para validar cedo o que tem mais risco. O risco maior deste produto **
 - [x] `src/lib/schemas/step.ts` com os seis tipos
 - [x] Design tokens e tipografia (`src/app/globals.css`)
 - [x] `scripts/seed-proposito.ts` — as 5 missões da seção 19, conteúdo real
-- [ ] Projeto no Neon + `DATABASE_URL` preenchida em `.env.local` ← **depende do Samuel**
-- [ ] Rodar `npm run db:migrate && npm run db:seed`
-- [ ] Deploy inicial na Vercel ligado ao Neon
+- [x] Projeto no Neon + `DATABASE_URL` preenchida em `.env.local`
+- [x] `npm run db:migrate && npm run db:seed` — Propósito no banco; `/jogar/proposito-7H3K` verificado contra o Neon (1,2s no cold start, 66ms do cache)
+- [ ] Deploy inicial na Vercel ligado ao Neon ← movido para a Fase 6, junto do polimento
 
 **Pronto quando:** o pipeline completo (commit → Vercel → Neon) funciona e o jogo Propósito está no banco.
 
