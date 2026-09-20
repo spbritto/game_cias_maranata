@@ -13,7 +13,8 @@ Este arquivo é o plano técnico; o descritivo continua sendo a fonte da verdade
 |---|---|---|
 | Hospedagem | Vercel | Disco efêmero: nada de arquivo local persistente |
 | Banco | Neon (Postgres serverless) | Substitui o SQLite cogitado no descritivo |
-| Framework | Next.js 15 (App Router) + React 19 | Necessário para preview de link no WhatsApp e cache de borda |
+| Framework | Next.js 16.3 (App Router) + React 19.2 | Necessário para preview de link no WhatsApp e cache de borda |
+| Cache | `cacheComponents: true` | Habilita `use cache` / `cacheTag`; ligado desde a Fase 0 |
 | Professores | Poucos, cadastrados manualmente | Login com senha; sem cadastro aberto |
 | Respostas dos adolescentes | **Não** são gravadas no MVP | Seção 16 do descritivo sai do escopo inicial |
 | Direção visual | Noturna / jornada | Índigo-violeta profundo + acento âmbar |
@@ -23,7 +24,7 @@ Este arquivo é o plano técnico; o descritivo continua sendo a fonte da verdade
 O descritivo pede "basicamente tudo frontend em React". Next.js **é** React — a diferença é quem renderiza a primeira tela. Três motivos concretos, em ordem de peso:
 
 1. **Preview de link no WhatsApp.** A seção 12 do descritivo trata o compartilhamento por WhatsApp como fluxo principal. O preview (título, tema, imagem) exige meta tags `og:` presentes no HTML que o servidor devolve. Uma SPA devolve um `<div id="root">` vazio — o WhatsApp mostra um card cinza sem nada. Isso não tem contorno no lado do cliente.
-2. **Cold start do Neon.** O free tier hiberna após inatividade e a primeira consulta leva ~1s. A página do jogo publicado é conteúdo praticamente estático: cacheada com `revalidateTag`, a maioria dos adolescentes nunca encosta no banco. Uma SPA obrigatoriamente faria fetch em runtime.
+2. **Cold start do Neon.** O free tier hiberna após inatividade e a primeira consulta leva ~1s. A página do jogo publicado é conteúdo praticamente estático: cacheada com `use cache` + `cacheTag(slug)`, a maioria dos adolescentes nunca encosta no banco. Uma SPA obrigatoriamente faria fetch em runtime.
 3. **Zero backend separado.** Server Actions cobrem todo o CRUD do professor sem escrever uma rota de API. O MVP não precisa de nenhum arquivo em `app/api/`.
 
 O custo é honesto: o projeto deixa de ser "só frontend" e passa a ter código que roda no servidor. Mas não existe processo separado para manter, nem CORS, nem segundo deploy.
@@ -47,7 +48,7 @@ Navegador do adolescente          Navegador do professor
          │ (server component, cacheado)     │ (sessão via cookie)
          ▼                                  ▼
 ┌──────────────────────────────────────────────────┐
-│              Next.js 15 na Vercel                │
+│              Next.js 16 na Vercel                │
 │  App Router · Server Components · Server Actions  │
 └──────────────────────────────────────────────────┘
                         │
@@ -64,14 +65,14 @@ Driver HTTP do Neon, não TCP: em serverless, pool de conexões TCP estoura o li
 
 | Camada | Escolha | Justificativa |
 |---|---|---|
-| Framework | Next.js 15 (App Router) | Ver 1.1 |
+| Framework | Next.js 16.3 (App Router, Turbopack) | Ver 1.1 |
 | Linguagem | TypeScript (strict) | Tipos de etapa são o núcleo do sistema |
 | Banco | Neon Postgres | Decisão do projeto |
 | ORM | Drizzle ORM | Sem binário de engine — cold start baixo, migrações em SQL legível |
-| Validação | Zod | Uma união discriminada de tipos de etapa, compartilhada entre cliente e servidor |
+| Validação | Zod 4 | Uma união discriminada de tipos de etapa, compartilhada entre cliente e servidor |
 | Estilo | Tailwind CSS v4 | Tokens como CSS vars, configuração dentro do próprio CSS |
 | Componentes | shadcn/ui | Só na área do professor (formulários, diálogos) — código no repo, não dependência |
-| Animação | Motion (`framer-motion`) | O reveal da reflexão é o momento central da experiência |
+| Animação | `motion` | O reveal da reflexão é o momento central da experiência |
 | Ordenação | `@dnd-kit/*` | Funciona em toque; `react-beautiful-dnd` está sem manutenção |
 | Formulários | react-hook-form + `@hookform/resolvers/zod` | Reaproveita os mesmos schemas Zod |
 | QR Code | `qrcode` | Gera PNG para download, não só canvas |
@@ -115,7 +116,7 @@ game_cias_maranata/
 │   │   ├── client.ts                # Neon
 │   │   └── queries/
 │   └── lib/
-│       ├── schemas/etapa.ts         # FONTE DA VERDADE dos tipos de etapa
+│       ├── schemas/step.ts          # FONTE DA VERDADE dos tipos de etapa
 │       ├── auth.ts
 │       ├── slug.ts
 │       └── progresso-local.ts       # localStorage do adolescente
@@ -183,12 +184,12 @@ O descritivo lista `Alternativa` e `Reflexão` como entidades candidatas (seçã
 
 ### 3.2 União discriminada dos tipos de etapa
 
-`src/lib/schemas/etapa.ts` é o arquivo mais importante do projeto: define os seis tipos da seção 8, gera os tipos TypeScript, valida a escrita nas Server Actions e alimenta os formulários do editor.
+`src/lib/schemas/step.ts` é o arquivo mais importante do projeto: define os seis tipos da seção 8, gera os tipos TypeScript, valida a escrita nas Server Actions e alimenta os formulários do editor.
 
 ```
 StepSchema = discriminatedUnion('type', [
   ChoiceStep,        // 8.1 — situação + alternativas + reflexão por alternativa
-  ScenarioStep,      // 8.2 — cenário do cotidiano + pergunta aberta de conversa
+  ScenarioStep,      // 8.2 — cenário do cotidiano + alternativas, nunca com resposta certa
   TrueFalseStep,     // 8.3 — afirmação + verdadeiro/falso + explicação
   ReflectionStep,    // 8.4 — pergunta pessoal, sem resposta certa, opções livres
   VerseStep,         // 8.5 — texto bíblico + referência + comentário do professor
@@ -199,6 +200,8 @@ StepSchema = discriminatedUnion('type', [
 Campos comuns a todos (seção 9), quase todos opcionais: `title`, `context`, `question`, `feedback`, `reflection`, `scriptureRef`, `scriptureText`, `discussionQuestion`.
 
 Detalhe de produto que o schema precisa sustentar (seções 10 e 3.4): em `ChoiceStep`, a reflexão é **por alternativa**, não por etapa. É o que permite o feedback ensinar em vez de dizer "certo/errado". `correctOptionId` é opcional e, quando ausente, a interface não marca nenhuma alternativa como certa.
+
+`ScenarioStep` e `ReflectionStep` ficaram próximos no descritivo, então a distinção foi fixada na implementação: `scenario` exige `context` (o cenário narrativo) e **não tem** `correctOptionId` em nenhuma hipótese; `reflection` é pergunta direta com opções curtas tipo etiqueta e aceita `allowMultiple`. `verse` é a única etapa que não espera resposta — `stepExpectsAnswer()` é o que o runtime consulta para decidir entre mostrar alternativas ou só o botão de avançar.
 
 ### 3.3 Regras de ciclo de vida
 
@@ -238,14 +241,15 @@ Tokens em `globals.css` como CSS custom properties, expostos ao Tailwind v4 via 
 
 Ordenadas para validar cedo o que tem mais risco. O risco maior deste produto **não** é técnico — é o adolescente achar a experiência sem graça. Por isso a experiência do jogador vem antes do editor, alimentada por um seed do jogo "Propósito" (seção 19) inserido direto no banco.
 
-### Fase 0 — Fundação
-- Next.js 15 + TypeScript strict + Tailwind v4
-- Projeto no Neon, `DATABASE_URL`, branch de desenvolvimento
-- Drizzle: schema, `drizzle.config.ts`, primeira migração
-- `src/lib/schemas/etapa.ts` com os seis tipos
-- Design tokens e tipografia
-- `scripts/seed-proposito.ts` — as 5 missões da seção 19, conteúdo real
-- Deploy inicial na Vercel ligado ao Neon
+### Fase 0 — Fundação ✅ (commit `b581efc`)
+- [x] Next.js 16.3 + TypeScript strict + Tailwind v4 + `cacheComponents: true`
+- [x] Drizzle: `src/db/schema.ts`, `drizzle.config.ts`, migração `0000`
+- [x] `src/lib/schemas/step.ts` com os seis tipos
+- [x] Design tokens e tipografia (`src/app/globals.css`)
+- [x] `scripts/seed-proposito.ts` — as 5 missões da seção 19, conteúdo real
+- [ ] Projeto no Neon + `DATABASE_URL` preenchida em `.env.local` ← **depende do Samuel**
+- [ ] Rodar `npm run db:migrate && npm run db:seed`
+- [ ] Deploy inicial na Vercel ligado ao Neon
 
 **Pronto quando:** o pipeline completo (commit → Vercel → Neon) funciona e o jogo Propósito está no banco.
 
@@ -265,7 +269,7 @@ Situação do cotidiano, Verdadeiro/Falso, Reflexão pessoal, Versículo, Pergun
 Conclusão ganha recap das respostas + botão "Mandar pro professor" (deep link `wa.me`).
 
 ### Fase 3 — Autenticação e dashboard
-- Login com bcrypt + JWT em cookie `httpOnly` / `secure` / `sameSite=lax` via `jose`; middleware protegendo `(professor)`
+- Login com bcrypt + JWT em cookie `httpOnly` / `secure` / `sameSite=lax` via `jose`; `proxy.ts` protegendo `(professor)` — no Next 16 `middleware` foi renomeado para `proxy` e roda só no runtime Node
 - `scripts/criar-professor.ts`
 - Dashboard (seção 5.1): lista por estado, com criar / editar / duplicar / publicar / compartilhar / encerrar
 
@@ -277,7 +281,7 @@ Conclusão ganha recap das respostas + botão "Mandar pro professor" (deep link 
 - Prévia reaproveitando o runtime da Fase 1 com dados de rascunho
 
 ### Fase 5 — Publicação e compartilhamento
-- Publicar → gera slug estável → `revalidateTag`
+- Publicar → gera slug estável → `updateTag(slug)` (não `revalidateTag`: o professor precisa ver a publicação surtir efeito na hora, não depois de uma revalidação em segundo plano)
 - Painel: copiar link, abrir no WhatsApp, QR Code com download em PNG
 - Encerrar e republicar
 
@@ -321,3 +325,31 @@ adiciona reflexões e referências → pré-visualiza → publica →
 recebe link e QR Code → envia no grupo → adolescentes jogam pelo celular →
 professor conduz a discussão a partir da experiência
 ```
+
+---
+
+## 8. Registro de ajustes
+
+Mudanças feitas depois que o plano foi aprovado, com o motivo. O plano acima já está corrigido; esta seção existe para que a diferença não se perca.
+
+### 2026-09-20 — Next.js 16 em vez de 15
+
+O plano foi escrito assumindo Next.js 15. O estável publicado é **16.3.5**, e o `AGENTS.md` que o próprio framework instala avisa que a versão tem breaking changes em relação ao que um modelo de linguagem "sabe" — com os docs versionados em `node_modules/next/dist/docs/`. Consultados antes de escrever código. O que mudou de fato para este projeto:
+
+| Item | Next 15 (plano) | Next 16 (real) |
+|---|---|---|
+| Cache da página pública | `unstable_cache` | `use cache` + `cacheTag`, exigindo `cacheComponents: true` |
+| Invalidar ao publicar | `revalidateTag(tag)` | `updateTag(tag)` em Server Action — `revalidateTag` agora exige um 2º argumento de perfil e só serve stale-while-revalidate |
+| Proteção de rota | `middleware.ts` | `proxy.ts`, runtime Node fixo |
+| `params` / `searchParams` / `cookies()` | síncronos permitidos | **sempre** `await` |
+| Bundler | opt-in | Turbopack por padrão em `dev` e `build` |
+
+**`cacheComponents: true` foi ligado já na Fase 0**, e não adiado para o polimento, porque ele muda a regra de como toda leitura dinâmica precisa ser escrita (o que não é cacheado tem de estar sob Suspense). Ligar depois significaria revisar todas as telas prontas.
+
+### 2026-09-20 — Zod 4
+
+Instalado 4.6.5, não 3.x. `z.email()` e `z.uuid()` passaram a ser funções de topo e a customização de mensagem usa `error:` no lugar de `message:`. Sem impacto no desenho, mas o código do editor (Fase 4) precisa nascer nessa sintaxe.
+
+### 2026-09-20 — `db` atrás de Proxy
+
+Não previsto no plano. `src/db/client.ts` valida `DATABASE_URL` no primeiro uso, não no import, porque um `next build` em máquina sem a variável quebraria em qualquer rota que apenas importasse o módulo — inclusive rotas que não consultam o banco.
