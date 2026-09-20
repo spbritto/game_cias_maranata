@@ -1,0 +1,123 @@
+@import "tailwindcss";
+
+/*
+  Direcao visual: noturno / jornada (secao 4 do PLANO_EXECUCAO).
+  Base indigo-violeta profunda, acento ambar de descoberta, violeta de progresso.
+  A aplicacao e escura por definicao — nao ha tema claro, e isso e intencional:
+  o jogo e usado em sala, no celular, e a paleta noturna sustenta a ideia de
+  jornada sem cair na estetica infantil nem no clichê de material de igreja.
+*/
+
+@theme {
+  /* --- paleta base: noite ------------------------------------------------ */
+  --color-night-950: oklch(0.13 0.035 286);
+  --color-night-900: oklch(0.17 0.045 286);
+  --color-night-850: oklch(0.21 0.05 286);
+  --color-night-800: oklch(0.25 0.055 286);
+  --color-night-700: oklch(0.33 0.055 286);
+  --color-night-600: oklch(0.45 0.05 286);
+  --color-night-500: oklch(0.58 0.04 286);
+  --color-night-300: oklch(0.76 0.03 286);
+  --color-night-100: oklch(0.94 0.012 286);
+
+  /* --- acento: brasa (descoberta, luz, o momento da reflexao) ------------ */
+  --color-ember-300: oklch(0.89 0.09 82);
+  --color-ember-400: oklch(0.84 0.13 78);
+  --color-ember-500: oklch(0.78 0.155 72);
+  --color-ember-600: oklch(0.7 0.16 64);
+
+  /* --- jornada: aurora (progresso, selecao) ------------------------------ */
+  --color-aurora-400: oklch(0.74 0.155 296);
+  --color-aurora-500: oklch(0.66 0.19 296);
+  --color-aurora-600: oklch(0.58 0.21 294);
+
+  /*
+    Semanticos. Preferir estes nos componentes: trocar a paleta depois nao deve
+    exigir varrer o codigo. Nao existe token de "acerto" e "erro" de proposito —
+    secao 3.4 e 17 do descritivo proibem feedback que julgue o adolescente.
+  */
+  --color-surface: var(--color-night-900);
+  --color-surface-raised: var(--color-night-850);
+  --color-surface-overlay: var(--color-night-800);
+  --color-line: var(--color-night-700);
+  --color-line-strong: var(--color-night-600);
+  --color-ink: var(--color-night-100);
+  --color-ink-muted: var(--color-night-300);
+  --color-ink-subtle: var(--color-night-500);
+  --color-accent: var(--color-ember-500);
+  --color-accent-soft: var(--color-ember-400);
+  --color-journey: var(--color-aurora-500);
+
+  /* --- tipografia -------------------------------------------------------- */
+  --font-display: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  /* --- forma ------------------------------------------------------------- */
+  --radius-card: 1.25rem;
+  --radius-field: 0.875rem;
+  --radius-pill: 9999px;
+
+  /* Alvo minimo de toque (secao 4 do plano): use min-h-touch nos botoes. */
+  --spacing-touch: 3rem;
+
+  /* --- movimento --------------------------------------------------------- */
+  --ease-entrance: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.7, 0, 0.84, 0);
+}
+
+:root {
+  color-scheme: dark;
+}
+
+@layer base {
+  html {
+    /* iOS: evita o zoom automatico ao focar um campo com fonte < 16px */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-night-950);
+    /* brilho sutil no topo, como ceu noturno — nao e decoracao gratuita:
+       da profundidade a tela sem custar mais texto ou imagem */
+    background-image: radial-gradient(
+      120% 80% at 50% -20%,
+      oklch(0.28 0.09 292 / 0.55) 0%,
+      transparent 60%
+    );
+    background-attachment: fixed;
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /* Foco sempre visivel — requisito de acessibilidade da Fase 6. */
+  :focus-visible {
+    outline: 2px solid var(--color-ember-400);
+    outline-offset: 2px;
+  }
+}
+
+/* Respeitar quem pediu menos movimento. Vale para CSS e para o Motion,
+   que le a mesma media query via useReducedMotion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

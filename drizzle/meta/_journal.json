@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1789905263423,
+      "tag": "0000_premium_norman_osborn",
+      "breakpoints": true
+    }
+  ]
+}
