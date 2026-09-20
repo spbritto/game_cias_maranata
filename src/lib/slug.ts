@@ -1,4 +1,5 @@
 import { customAlphabet } from "nanoid";
+import { appUrl } from "./app-url";
 
 /**
  * Alfabeto sem 0/O/1/I/L: o codigo aparece na URL que o professor le em voz alta
@@ -34,7 +35,6 @@ export function buildGameSlug(theme: string): string {
 
 /** URL completa e compartilhavel do jogo. Usada no link, no QR Code e no OG. */
 export function gameUrl(slug: string, origin?: string): string {
-  const base =
-    origin ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  return `${base.replace(/\/$/, "")}/jogar/${slug}`;
+  const base = origin ? origin.replace(/\/$/, "") : appUrl();
+  return `${base}/jogar/${slug}`;
 }

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Outfit } from "next/font/google";
+import { appUrl } from "@/lib/app-url";
 import "./globals.css";
 
 /**
@@ -20,6 +21,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  // Base das URLs absolutas em og:image e afins — o WhatsApp exige absoluta.
+  metadataBase: new URL(appUrl()),
   title: {
     default: "Missões",
     template: "%s · Missões",
