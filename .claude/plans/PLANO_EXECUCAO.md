@@ -362,6 +362,12 @@ O plano foi escrito assumindo Next.js 15. O estável publicado é **16.3.5**, e 
 
 Instalado 4.6.5, não 3.x. `z.email()` e `z.uuid()` passaram a ser funções de topo e a customização de mensagem usa `error:` no lugar de `message:`. Sem impacto no desenho, mas o código do editor (Fase 4) precisa nascer nessa sintaxe.
 
+### 2026-09-20 — Marco v0.1 antes da Fase 3
+
+O Samuel aprovou a jornada no celular e pediu uma primeira versão para apresentar aos adolescentes com o jogo Propósito, antes de existir área do professor. Tag `v0.1` (commit `9913f62`), publicada no GitHub. Não estava no plano: as fases previam o MVP inteiro antes de qualquer uso real. É uma mudança boa — validar a experiência do adolescente com adolescentes de verdade antes de investir no editor é exatamente a ordem de risco que a seção 5 defende.
+
+Preparação feita para o deploy, sem feature nova: raiz sem link para `/painel`, 404 com identidade, `icon.svg`, `metadataBase` via `appUrl()` (detecta a URL da Vercel sozinha), README com os passos.
+
 ### 2026-09-20 — `db` atrás de Proxy
 
 Não previsto no plano. `src/db/client.ts` valida `DATABASE_URL` no primeiro uso, não no import, porque um `next build` em máquina sem a variável quebraria em qualquer rota que apenas importasse o módulo — inclusive rotas que não consultam o banco.
