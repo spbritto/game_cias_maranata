@@ -1,4 +1,5 @@
 import { BookOpen } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 /**
  * Bloco de texto bíblico. Tem tratamento visual próprio de propósito: na
@@ -7,12 +8,20 @@ import { BookOpen } from "lucide-react";
 export function ScriptureCard({
   reference,
   text,
+  glow,
 }: {
   reference: string;
   text?: string;
+  /** Brilho âmbar estático — para quando o versículo é o centro da tela. */
+  glow?: boolean;
 }) {
   return (
-    <figure className="rounded-card border border-ember-500/25 bg-ember-500/[0.07] p-5">
+    <figure
+      className={cn(
+        "rounded-card border border-ember-500/25 bg-ember-500/[0.07] p-5",
+        glow && "glow-ember",
+      )}
+    >
       <blockquote className="text-[0.975rem] leading-relaxed text-ink">
         {text ? `“${text}”` : null}
       </blockquote>

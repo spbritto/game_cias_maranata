@@ -1,8 +1,9 @@
 "use client";
 
-import { MessageCircle, RotateCcw } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
+import { Check, MessageCircle, RotateCcw } from "lucide-react";
+import { growDown, pop, rise, staggerGroup, tap } from "./motion-presets";
 import { ScriptureCard } from "./scripture-card";
-
 import type { PlayableGame, PlayableStep } from "@/lib/game";
 import type { PlayerAnswer } from "@/lib/player-progress";
 import { stepHeadline } from "@/lib/schemas/step";
@@ -25,6 +26,8 @@ export function ConclusionScreen({
   answers: Record<string, PlayerAnswer>;
   onRestart: () => void;
 }) {
+  const reduced = useReducedMotion();
+  const item = rise(reduced);
   const conclusion = game.conclusion;
   const recap = game.steps
     .map((step) => ({ step, text: describeAnswer(step, answers[step.id]) }))
@@ -33,84 +36,136 @@ export function ConclusionScreen({
     );
 
   return (
-    <div className="flex flex-col gap-8 py-12">
-      <header className="flex flex-col gap-4">
-        <p className="text-sm font-semibold tracking-[0.2em] text-ember-400 uppercase">
+    <motion.div
+      variants={staggerGroup(reduced, 0.1)}
+      initial="hidden"
+      animate="show"
+      className="flex flex-col gap-8 py-12"
+    >
+      <motion.header
+        variants={staggerGroup(reduced, 0.1)}
+        className="flex flex-col gap-4"
+      >
+        {/* selo de conclusão: a única "conquista" da jornada, e ela é de
+            chegada, não de pontuação */}
+        <motion.span
+          variants={pop(reduced)}
+          className="glow-ember flex size-16 items-center justify-center rounded-full border border-ember-500/40 bg-ember-500/15 text-ember-400"
+        >
+          <Check aria-hidden className="size-8" strokeWidth={2.5} />
+        </motion.span>
+
+        <motion.p
+          variants={item}
+          className="text-sm font-semibold tracking-[0.2em] text-ember-400 uppercase"
+        >
           {nickname ? `Boa, ${nickname}` : "Chegou ao fim"}
-        </p>
-        <h1 className="text-3xl leading-tight font-semibold text-ink">
+        </motion.p>
+
+        <motion.h1
+          variants={item}
+          className="text-3xl leading-tight font-semibold text-ink"
+        >
           {conclusion?.title ?? "Missão concluída"}
-        </h1>
+        </motion.h1>
+
         {conclusion?.message ? (
-          <p className="text-lg leading-relaxed text-ink-muted">
+          <motion.p
+            variants={item}
+            className="text-lg leading-relaxed text-ink-muted"
+          >
             {conclusion.message}
-          </p>
+          </motion.p>
         ) : null}
-      </header>
+      </motion.header>
 
       {conclusion?.diagram?.length ? (
-        <ol className="flex flex-col items-center gap-1">
+        <motion.ol
+          variants={staggerGroup(reduced, 0.12)}
+          className="flex flex-col items-center"
+        >
           {conclusion.diagram.map((node, i) => (
-            <li key={node} className="flex flex-col items-center gap-1">
+            <li key={node} className="flex flex-col items-center">
               {i > 0 ? (
-                <span aria-hidden className="h-5 w-px bg-ember-500/40" />
+                <motion.span
+                  aria-hidden
+                  variants={growDown(reduced)}
+                  style={{ originY: 0 }}
+                  className="h-6 w-px bg-ember-500/50"
+                />
               ) : null}
-              <span className="rounded-pill border border-ember-500/30 bg-ember-500/[0.07] px-5 py-2 text-sm font-semibold tracking-[0.12em] text-ember-300 uppercase">
+              <motion.span
+                variants={pop(reduced)}
+                className="rounded-pill border border-ember-500/30 bg-ember-500/[0.07] px-5 py-2 text-sm font-semibold tracking-[0.12em] text-ember-300 uppercase"
+              >
                 {node}
-              </span>
+              </motion.span>
             </li>
           ))}
-        </ol>
+        </motion.ol>
       ) : null}
 
       {conclusion?.scriptureRef ? (
-        <ScriptureCard
-          reference={conclusion.scriptureRef}
-          text={conclusion.scriptureText}
-        />
+        <motion.div variants={item}>
+          <ScriptureCard
+            reference={conclusion.scriptureRef}
+            text={conclusion.scriptureText}
+            glow
+          />
+        </motion.div>
       ) : null}
 
       {conclusion?.discussionQuestion ? (
-        <section className="rounded-card border border-aurora-500/30 bg-aurora-500/[0.08] p-5">
+        <motion.section
+          variants={item}
+          className="rounded-card border border-aurora-500/30 bg-aurora-500/[0.08] p-5"
+        >
           <p className="text-xs font-semibold tracking-[0.18em] text-aurora-400 uppercase">
             Para conversar na aula
           </p>
           <p className="mt-2 leading-relaxed text-ink">
             {conclusion.discussionQuestion}
           </p>
-        </section>
+        </motion.section>
       ) : null}
 
       {recap.length ? (
-        <section className="flex flex-col gap-4">
-          <h2 className="text-lg font-semibold text-ink">O que você respondeu</h2>
+        <motion.section
+          variants={staggerGroup(reduced, 0.06)}
+          className="flex flex-col gap-4"
+        >
+          <motion.h2 variants={item} className="text-lg font-semibold text-ink">
+            O que você respondeu
+          </motion.h2>
           <dl className="flex flex-col gap-4">
             {recap.map(({ step, text }) => (
-              <div
+              <motion.div
                 key={step.id}
+                variants={item}
                 className="rounded-card border border-line bg-surface-raised p-4"
               >
                 <dt className="text-sm text-ink-subtle">
                   {stepHeadline(step.data)}
                 </dt>
                 <dd className="mt-1 leading-relaxed text-ink">{text}</dd>
-              </div>
+              </motion.div>
             ))}
           </dl>
-        </section>
+        </motion.section>
       ) : null}
 
-      <div className="flex flex-col gap-3">
+      <motion.div variants={item} className="flex flex-col gap-3">
         {recap.length ? (
-          <a
+          <motion.a
             href={whatsappLink(game, nickname, recap)}
             target="_blank"
             rel="noopener noreferrer"
+            whileTap={tap(reduced)}
             className="flex min-h-touch w-full items-center justify-center gap-2 rounded-pill bg-accent px-6 text-base font-semibold text-night-950 transition-colors hover:bg-accent-soft"
           >
             <MessageCircle aria-hidden className="size-5" />
             Mandar pro professor
-          </a>
+          </motion.a>
         ) : null}
 
         <button
@@ -121,8 +176,8 @@ export function ConclusionScreen({
           <RotateCcw aria-hidden className="size-4" />
           Jogar de novo
         </button>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
