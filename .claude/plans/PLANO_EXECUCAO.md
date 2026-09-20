@@ -253,7 +253,14 @@ Ordenadas para validar cedo o que tem mais risco. O risco maior deste produto **
 
 **Pronto quando:** o pipeline completo (commit → Vercel → Neon) funciona e o jogo Propósito está no banco.
 
-### Fase 1 — Fatia vertical do jogador ⬅ ponto de validação
+### Fases 1 e 2 — Experiência do jogador ✅ (commit `0a08e3b`) ⬅ ponto de validação
+
+Unidas em um passo só: `scenario` reaproveita quase toda a UI de `choice` e `true_false` é uma escolha de duas opções, então separar custaria mais que fazer junto — e o checkpoint visual passa a ser o Propósito inteiro, não um pedaço. Os seis tipos de etapa estão no runtime. Falta apenas rodar contra o Neon.
+
+<details>
+<summary>Escopo original das duas fases</summary>
+
+#### Fase 1 — Fatia vertical do jogador
 - `/jogar/[slug]`: tela inicial (título, tema, apresentação, apelido opcional, "Começar missão")
 - Runtime da etapa tipo **Escolha**: situação → alternativas → reveal da reflexão → versículo → próxima
 - Progresso em constelação, transições com Motion
@@ -264,9 +271,14 @@ Ordenadas para validar cedo o que tem mais risco. O risco maior deste produto **
 **Pronto quando:** dá para abrir o link no celular e jogar o Propósito do início ao fim.
 **Checkpoint:** aprovação visual antes de propagar a identidade para o resto do sistema.
 
-### Fase 2 — Demais tipos de etapa
+#### Fase 2 — Demais tipos de etapa
 Situação do cotidiano, Verdadeiro/Falso, Reflexão pessoal, Versículo, Pergunta aberta.
 Conclusão ganha recap das respostas + botão "Mandar pro professor" (deep link `wa.me`).
+
+</details>
+
+**Verificado:** typecheck, lint, build (a rota saiu como Partial Prerender), render no servidor da tela inicial, tokens e fontes no CSS servido.
+**Não verificado:** a navegação clicando pelas etapas e a aparência real em celular — dependem de olho humano e do banco.
 
 ### Fase 3 — Autenticação e dashboard
 - Login com bcrypt + JWT em cookie `httpOnly` / `secure` / `sameSite=lax` via `jose`; `proxy.ts` protegendo `(professor)` — no Next 16 `middleware` foi renomeado para `proxy` e roda só no runtime Node
