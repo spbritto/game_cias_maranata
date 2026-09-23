@@ -8,7 +8,7 @@
  * que o link aberto no celular durante o desenvolvimento não mude. O conteúdo
  * em si vive em src/lib/fixtures/proposito.ts, compartilhado com a rota /demo.
  */
-import { eq } from "drizzle-orm";
+import { asc, eq, ne } from "drizzle-orm";
 import { db } from "../src/db/client";
 import { games, steps, teachers } from "../src/db/schema";
 import { conclusionSchema, stepDataSchema } from "../src/lib/schemas/step";
@@ -38,13 +38,22 @@ async function main() {
   });
   console.log(`  ${validated.length} etapas válidas.`);
 
-  // Professor do seed. O hash é propositalmente inválido: nenhuma senha casa
-  // com ele, então esse registro não serve para login. A Fase 3 traz o
-  // scripts/criar-professor.ts para cadastrar professores de verdade.
+  // Prefere um professor de verdade, cadastrado por scripts/criar-professor.ts:
+  // assim o jogo aparece no painel de quem vai usar o sistema. Só cai no
+  // professor sintético quando ainda não existe nenhum.
   let [teacher] = await db
     .select()
     .from(teachers)
-    .where(eq(teachers.email, SEED_EMAIL));
+    .where(ne(teachers.email, SEED_EMAIL))
+    .orderBy(asc(teachers.createdAt))
+    .limit(1);
+
+  if (!teacher) {
+    [teacher] = await db
+      .select()
+      .from(teachers)
+      .where(eq(teachers.email, SEED_EMAIL));
+  }
 
   if (!teacher) {
     [teacher] = await db

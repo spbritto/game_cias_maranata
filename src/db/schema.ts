@@ -10,6 +10,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import type { Conclusion, StepData } from "@/lib/schemas/step";
+import type { ConclusionDraft, StepDraft } from "@/lib/schemas/step-draft";
 
 /**
  * Tres tabelas no MVP. A coleta de respostas do adolescente (secao 16 do
@@ -64,8 +65,12 @@ export const games = pgTable(
      */
     slug: text().unique(),
 
-    /** Tela de fechamento (secao 11). Validado por `conclusionSchema`. */
-    conclusion: jsonb().$type<Conclusion>(),
+    /**
+     * Tela de fechamento (secao 11). Guarda a forma estrita quando publicado e
+     * a de rascunho enquanto o professor edita — as duas passam por Zod, e toda
+     * leitura revalida antes de usar.
+     */
+    conclusion: jsonb().$type<Conclusion | ConclusionDraft>(),
 
     publishedAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -96,7 +101,7 @@ export const steps = pgTable(
      * Conteudo da etapa. O formato depende de `type` e e garantido pelo
      * `stepDataSchema` — o banco nao valida nada aqui.
      */
-    data: jsonb().$type<StepData>().notNull(),
+    data: jsonb().$type<StepData | StepDraft>().notNull(),
 
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
