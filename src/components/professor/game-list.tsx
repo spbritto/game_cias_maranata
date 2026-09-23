@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Button, StatusBadge } from "./ui";
 import type { GameSummary } from "@/db/queries/teacher-games";
-import { gameUrl } from "@/lib/slug";
+import { useOrigin } from "@/lib/use-origin";
 import {
   duplicarJogoAction,
   encerrarJogoAction,
@@ -116,7 +116,8 @@ function GameRow({ game }: { game: GameSummary }) {
 
 function ShareLink({ slug }: { slug: string }) {
   const [copied, setCopied] = useState(false);
-  const url = gameUrl(slug, typeof window === "undefined" ? undefined : window.location.origin);
+  const origin = useOrigin();
+  const url = `${origin}/jogar/${slug}`;
 
   async function copy() {
     try {
