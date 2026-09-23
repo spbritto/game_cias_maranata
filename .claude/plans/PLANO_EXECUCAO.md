@@ -3,7 +3,7 @@
 Documento derivado de [`descritivo_sistema_gamificacao_aulas_cristas.md`](descritivo_sistema_gamificacao_aulas_cristas.md).
 Este arquivo é o plano técnico; o descritivo continua sendo a fonte da verdade sobre **produto**.
 
-Última atualização: 2026-09-20
+Última atualização: 2026-09-23
 
 ---
 
@@ -71,10 +71,10 @@ Driver HTTP do Neon, não TCP: em serverless, pool de conexões TCP estoura o li
 | ORM | Drizzle ORM | Sem binário de engine — cold start baixo, migrações em SQL legível |
 | Validação | Zod 4 | Uma união discriminada de tipos de etapa, compartilhada entre cliente e servidor |
 | Estilo | Tailwind CSS v4 | Tokens como CSS vars, configuração dentro do próprio CSS |
-| Componentes | shadcn/ui | Só na área do professor (formulários, diálogos) — código no repo, não dependência |
+| Componentes | primitivas próprias (`components/professor/ui.tsx`) | shadcn/ui foi descartado — ver seção 8 |
 | Animação | `motion` | O reveal da reflexão é o momento central da experiência |
 | Ordenação | `@dnd-kit/*` | Funciona em toque; `react-beautiful-dnd` está sem manutenção |
-| Formulários | react-hook-form + `@hookform/resolvers/zod` | Reaproveita os mesmos schemas Zod |
+| Formulários | estado levantado + Zod | react-hook-form foi descartado — ver seção 8 |
 | QR Code | `qrcode` | Gera PNG para download, não só canvas |
 | Ícones | `lucide-react` | |
 | Senha | `bcryptjs` | |
@@ -108,7 +108,7 @@ game_cias_maranata/
 │   │   ├── layout.tsx
 │   │   └── globals.css                   # design tokens
 │   ├── components/
-│   │   ├── ui/                      # shadcn
+│   │   ├── professor/ui.tsx         # primitivas próprias
 │   │   ├── jogador/                 # cartões de etapa, progresso, reveal
 │   │   └── professor/               # editor de etapa, lista ordenável
 │   ├── db/
@@ -116,7 +116,8 @@ game_cias_maranata/
 │   │   ├── client.ts                # Neon
 │   │   └── queries/
 │   └── lib/
-│       ├── schemas/step.ts          # FONTE DA VERDADE dos tipos de etapa
+│       ├── schemas/step.ts          # FONTE DA VERDADE (estrito: publicar/jogar)
+│       ├── schemas/step-draft.ts    # permissivo: autosave do editor
 │       ├── auth.ts
 │       ├── slug.ts
 │       └── progresso-local.ts       # localStorage do adolescente
@@ -280,12 +281,12 @@ Conclusão ganha recap das respostas + botão "Mandar pro professor" (deep link 
 **Verificado:** typecheck, lint, build (a rota saiu como Partial Prerender), render no servidor da tela inicial, tokens e fontes no CSS servido.
 **Não verificado:** a navegação clicando pelas etapas e a aparência real em celular — dependem de olho humano e do banco.
 
-### Fase 3 — Autenticação e dashboard
+### Fase 3 — Autenticação e dashboard ✅ (commit `c92c0b3`)
 - Login com bcrypt + JWT em cookie `httpOnly` / `secure` / `sameSite=lax` via `jose`; `proxy.ts` protegendo `(professor)` — no Next 16 `middleware` foi renomeado para `proxy` e roda só no runtime Node
 - `scripts/criar-professor.ts`
 - Dashboard (seção 5.1): lista por estado, com criar / editar / duplicar / publicar / compartilhar / encerrar
 
-### Fase 4 — Editor ⬅ maior fatia
+### Fase 4 — Editor ✅ (commit `da7876b`)
 - Etapa 1: informações da aula (seção 6)
 - Lista de etapas ordenável com dnd-kit, funcionando em toque
 - Um formulário por tipo de etapa, derivado do Zod, com autosave
@@ -361,6 +362,21 @@ O plano foi escrito assumindo Next.js 15. O estável publicado é **16.3.5**, e 
 ### 2026-09-20 — Zod 4
 
 Instalado 4.6.5, não 3.x. `z.email()` e `z.uuid()` passaram a ser funções de topo e a customização de mensagem usa `error:` no lugar de `message:`. Sem impacto no desenho, mas o código do editor (Fase 4) precisa nascer nessa sintaxe.
+
+### 2026-09-23 — Dois esquemas Zod por etapa
+
+O autosave precisa gravar etapa pela metade, mas o contrato diz que nada entra no `jsonb` sem passar por Zod. Resolvido com **dois** esquemas: `step-draft.ts` (permissivo, só garante a forma) para o editor, e o `stepDataSchema` estrito já existente para publicar e para o jogador. Todo rascunho estritamente válido também é válido no permissivo, então publicar só revalida — não converte. Verificado: as 6 etapas do Propósito voltam semanticamente idênticas depois do round-trip.
+
+### 2026-09-23 — Sem shadcn/ui e sem react-hook-form
+
+O plano previa os dois. Nenhum entrou:
+
+- **shadcn/ui** — cinco primitivas (`Field`, `TextInput`, `TextArea`, `Select`, `Button`) escritas à mão em `components/professor/ui.tsx` custam menos que a máquina de geração e a árvore de dependências, e herdam direto os tokens da identidade noturna.
+- **react-hook-form** — removido do projeto. Com autosave o estado precisa estar levantado no editor de qualquer forma; a biblioteca seria uma segunda fonte de verdade, e seu ganho (evitar render por tecla via campos não controlados) se perde assim que `watch()` entra para alimentar o autosave.
+
+### 2026-09-23 — Ids de etapa gerados no cliente
+
+Não previsto. O editor cria o id da etapa com `crypto.randomUUID()` e a gravação é upsert por id + remoção do que sobrou, em vez de apagar e reinserir. O motivo é o adolescente: o progresso no `localStorage` é chaveado pelo id da etapa, e reinserir trocaria os ids, fazendo quem está no meio da jornada perder o lugar quando o professor salva uma edição.
 
 ### 2026-09-20 — Marco v0.1 antes da Fase 3
 
