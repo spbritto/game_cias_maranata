@@ -3,7 +3,7 @@
 Documento derivado de [`descritivo_sistema_gamificacao_aulas_cristas.md`](descritivo_sistema_gamificacao_aulas_cristas.md).
 Este arquivo é o plano técnico; o descritivo continua sendo a fonte da verdade sobre **produto**.
 
-Última atualização: 2026-09-23
+Última atualização: 2026-09-26
 
 ---
 
@@ -15,7 +15,7 @@ Este arquivo é o plano técnico; o descritivo continua sendo a fonte da verdade
 | Banco | Neon (Postgres serverless) | Substitui o SQLite cogitado no descritivo |
 | Framework | Next.js 16.3 (App Router) + React 19.2 | Necessário para preview de link no WhatsApp e cache de borda |
 | Cache | `cacheComponents: true` | Habilita `use cache` / `cacheTag`; ligado desde a Fase 0 |
-| Professores | Poucos, cadastrados manualmente | Login com senha; sem cadastro aberto |
+| Professores | Poucos | Login com senha; cadastro pela própria tela de login, atrás de código de convite (revisto em 2026-09-26, ver seção 8) |
 | Respostas dos adolescentes | **Não** são gravadas no MVP | Seção 16 do descritivo sai do escopo inicial |
 | Direção visual | Noturna / jornada | Índigo-violeta profundo + acento âmbar |
 
@@ -293,17 +293,19 @@ Conclusão ganha recap das respostas + botão "Mandar pro professor" (deep link 
 - Editor da tela de conclusão
 - Prévia reaproveitando o runtime da Fase 1 com dados de rascunho
 
-### Fase 5 — Publicação e compartilhamento
-- Publicar → gera slug estável → `updateTag(slug)` (não `revalidateTag`: o professor precisa ver a publicação surtir efeito na hora, não depois de uma revalidação em segundo plano)
-- Painel: copiar link, abrir no WhatsApp, QR Code com download em PNG
-- Encerrar e republicar
+### Fase 5 — Publicação e compartilhamento ✅ (não commitado — aguardando revisão)
+- [x] Publicar → gera slug estável → `updateTag(slug)` — já saiu pronto na Fase 4
+- [x] Painel: copiar link, abrir no WhatsApp — já saiu pronto na Fase 4
+- [x] QR Code com download em PNG, gerado no navegador do professor (pacote `qrcode`)
+- [x] Encerrar e republicar — já no painel (Fase 4); agora também como atalho dentro do próprio editor
 
-### Fase 6 — Polimento
-- Acessibilidade: foco visível, contraste AA, alvos ≥48px, `prefers-reduced-motion`
-- Estados vazios, carregamento e erro em todas as telas
-- Manifest PWA + ícone (sem service worker)
-- Teste em 360px de largura
-- **Aula real com o jogo Propósito** — o critério de sucesso da seção 24
+### Fase 6 — Polimento ✅ código pronto, aula real pendente (não commitado — aguardando revisão)
+- [x] Acessibilidade: contraste AA corrigido em `ink-subtle` (calculado e verificado por conversão OKLCH→sRGB, não só no olho — ver seção 8); anúncios de leitor de tela na reordenação por arrastar (`dnd-kit` `Announcements`); link "pular para o conteúdo"; `prefers-reduced-motion` já valia desde a Fase 1-2
+- [x] Estados de erro: autosave trata falha de rede (não só de validação) e ganhou `retry()`; ações do painel (duplicar/encerrar/reabrir/excluir) e a publicação mostram erro em vez de travar caladas
+- [x] Limites de erro (`error.tsx`, `global-error.tsx`) e um 404 específico para jogo inexistente/de outro professor
+- [x] Manifest PWA + ícones gerados por `next/og` (mesmo mecanismo do preview do WhatsApp — sem biblioteca de imagem)
+- [ ] Teste em 360px de largura — revisão estrutural feita (containers `max-w-md`/`max-w-2xl`, grids que colapsam por padrão), mas não visualizada num navegador real; ver seção 8
+- [ ] **Aula real com o jogo Propósito** — depende do Samuel, é o critério de sucesso da seção 24
 
 ### Fora do MVP, por decisão
 | Item | Origem | Observação |
@@ -344,6 +346,47 @@ professor conduz a discussão a partir da experiência
 ## 8. Registro de ajustes
 
 Mudanças feitas depois que o plano foi aprovado, com o motivo. O plano acima já está corrigido; esta seção existe para que a diferença não se perca.
+
+### 2026-09-26 — Alterar senha (ainda não commitado)
+
+Nova página `/conta` (protegida pelo `proxy.ts`, link a partir do painel): mostra nome/e-mail e um formulário de troca de senha, que exige a senha atual, valida a nova (mínimo 8 caracteres, diferente da atual, confirmação batendo) e continua a sessão logada — não existe tabela de sessões para revogar as outras (mesma limitação que `session.ts` já documentava). Registrando explicitamente: quem trocar a senha porque suspeita que alguém mais tem acesso **não** derruba esse alguém de sessões já abertas em outro aparelho — só redefinir `AUTH_SECRET` faz isso, e isso desloga todo mundo, não só a conta afetada.
+
+Testado com 8 casos contra o Neon de verdade (senha atual errada, nova curta, confirmação divergente, nova igual à atual, troca válida, persistência no banco, senha antiga de fato parando de funcionar) antes de considerar pronto.
+
+### 2026-09-26 — Cadastro de professor pela tela de login (ainda não commitado)
+
+Reverte a decisão original da seção 4 ("poucos professores, cadastro feito por script, sem cadastro aberto") — o Samuel apagou os dados de professores (o que também apagou os jogos deles, via `onDelete: cascade`) e pediu explicitamente uma opção de cadastro na tela de login, que não existia.
+
+Como "cadastro aberto" era em si um controle de segurança (só quem eu cadastrasse manualmente tinha acesso), perguntei antes de construir: código de convite ou totalmente aberto. Escolhido **código de convite** — uma palavra-passe em `TEACHER_INVITE_CODE` (variável de ambiente) que a pessoa digita junto com nome/e-mail/senha. `scripts/criar-professor.ts` continua existindo, para quando não há ninguém com o código à mão.
+
+Dois achados ao testar contra o Neon de verdade, antes de confiar no código:
+
+- **Comparação do convite em tempo constante** (`timingSafeEqual`, não `===`), em `src/lib/invite.ts` — mesmo sendo um segredo combinado por fora (mensagem, conversa), uma comparação ingênua vaza quanto do começo da string bateu através do tempo de resposta.
+- **Violação de e-mail duplicado não tinha o formato que eu esperava.** Testei a corrida de duas pessoas se cadastrando com o mesmo e-mail ao mesmo tempo (a checagem prévia não fecha essa janela) e descobri que o Drizzle envolve o erro do driver num `DrizzleQueryError` — o código `23505` do Postgres fica em `error.cause.code`, não em `error.code`. Sem esse teste, `isUniqueViolation()` nunca teria reconhecido a violação, e a corrida cairia num erro 500 em vez da mensagem "esse e-mail já tem cadastro".
+
+Senha mínima de 8 caracteres no cadastro (o login não tem esse limite — contas antigas, criadas pelo script com senha de 12 caracteres aleatórios, não precisam ser re-validadas contra uma regra que não existia quando foram criadas).
+
+### 2026-09-26 — Revisão de segurança (Fases 5-6, ainda não commitada)
+
+Pedido do Samuel: "revise as questões de segurança da aplicação". Achados reais, não cosméticos:
+
+1. **Open redirect no login.** O parâmetro `destino` (para onde o `proxy.ts` manda voltar depois de logar) aceitava `/\evil.com` — o navegador normaliza a contrabarra para barra, então virava `//evil.com`, uma URL absoluta. Um link forjado `/entrar?destino=/\evil.com` faria o professor, depois de um login legítimo, ser levado para fora do site. Corrigido em `safeInternalPath()` (`actions.ts`), testado contra uma bateria de tentativas de escape (barra dupla, contrabarra, protocolo absoluto, caracteres de controle) — nenhuma escapa mais.
+2. **Cabeçalhos de segurança ausentes.** Adicionados em `next.config.ts`: `Content-Security-Policy: frame-ancestors 'none'` + `X-Frame-Options: DENY` (impede embutir a área do professor num iframe de outro site — sem isso, clickjacking sobre os botões Publicar/Excluir seria possível), `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` (o link do jogo carrega o slug na URL; não vazar isso para terceiros via referrer).
+3. **`server-only` reforçado** em `db/queries/games.ts` (faltava). **Não** adicionado em `db/client.ts` de propósito: os scripts de linha de comando (`seed`, `criar-professor`) importam esse módulo fora do runtime do Next, e o marcador os quebraria — testado, quebrou, revertido só ali. A fronteira real fica em `db/queries/*`, por onde a aplicação de fato acessa o banco.
+
+Verificado nesta revisão (sem achados): `npm audit` limpo em produção (as 4 vulnerabilidades moderadas do `esbuild` são só de desenvolvimento, via `tsx`); nenhum segredo (`AUTH_SECRET`, connection string do Neon) aparece no bundle do cliente nem no HTML servido; toda Server Action que recebe `gameId` confere posse antes de escrever; nenhum `dangerouslySetInnerHTML`/`eval` no código.
+
+### 2026-09-26 — Fases 5 e 6 (não commitadas — aguardando revisão do Samuel)
+
+Pedido explícito: implementar sem commitar, revisão fica com o Samuel. Só o que não é auto-explicável pelo diff:
+
+- **Contraste corrigido com cálculo, não no olho.** Converti os tokens OKLCH para sRGB linear (fórmulas do CSS Color 4) e computei a razão WCAG de cada par texto/fundo usado no app. `ink-subtle` (legendas, contadores, placeholder) media 4.13:1 contra o fundo de card mais escuro — abaixo do mínimo AA de 4.5:1. Subi a luminosidade de `--color-night-500` de L=0.61 (de 0.58), o que resolve todos os pares sem mudar a cor de forma perceptível isolada (`#787792` → `#81809b`).
+- **Pendência conhecida, deixada de propósito:** a borda `--color-line` mede só 1.63:1 contra o fundo da página — abaixo do 3:1 que a WCAG pede para contorno de campo de formulário. Corrigir direito exigiria subir bastante a luminosidade, o que colidiria visualmente com `--color-line-strong` (usada no hover) — um ajuste de paleta que não deveria ser feito sem eu conseguir ver o resultado. Registrado aqui em vez de arriscado às cegas.
+- **Autosave ganhou tratamento de falha de rede.** Antes, se a chamada ao servidor rejeitasse (sem internet, servidor fora do ar) em vez de devolver `{ ok: false }`, a tela ficava presa em "Salvando..." para sempre, sem aviso. Agora captura, mostra erro e oferece "Tentar de novo" (`retry()`), que dispara uma nova tentativa sem esperar a pausa normal de digitação.
+- **Ações do painel (duplicar/encerrar/reabrir/excluir) e a publicação ganharam o mesmo tratamento** — try/catch em volta da chamada com mensagem inline. Confirmado que isso não interfere no `redirect()` interno de duplicar/excluir: nenhuma das duas envolve o próprio `redirect()` em try/catch no servidor, então o cliente pode envolver a chamada com segurança (padrão documentado do Next).
+- **Ícones do PWA gerados por `next/og`, não por arquivo de imagem.** Mesmo mecanismo já usado no preview do WhatsApp (`opengraph-image.tsx`), reaproveitado para `apple-icon.tsx` e para uma rota `manifest-icon` parametrizada por tamanho — sem precisar de nenhuma ferramenta externa de processamento de imagem. Verifiquei a imagem gerada de verdade (não só que a rota responde 200).
+- **Anúncios de leitor de tela na reordenação por arrastar** (`dnd-kit` `Announcements`), para quem usa leitor de tela saber que uma missão mudou de posição — antes era silencioso.
+- **Limite não visualizado:** confirmei que `error.tsx` está corretamente registrado como boundary da rota (visível no payload RSC), mas não pude ver a tela renderizada de fato — isso acontece no cliente depois da hidratação, e esta sessão não tem navegador para executar JavaScript. O mesmo vale para o QR Code do `ShareCard` (gerado no navegador do professor) e para o teste em 360px de largura: a revisão foi estrutural (containers, grids), não visual.
 
 ### 2026-09-20 — Next.js 16 em vez de 15
 

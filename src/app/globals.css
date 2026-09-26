@@ -16,7 +16,11 @@
   --color-night-800: oklch(0.25 0.055 286);
   --color-night-700: oklch(0.33 0.055 286);
   --color-night-600: oklch(0.45 0.05 286);
-  --color-night-500: oklch(0.58 0.04 286);
+  /* L=0.61, não 0.58: no valor original, ink-subtle sobre surface-raised
+     (o par mais comum — legenda em card, placeholder de campo) media 4.13:1,
+     abaixo do mínimo AA de 4.5:1 para texto. Calculado e verificado com
+     conversão OKLCH -> sRGB linear (fórmulas CSS Color 4). */
+  --color-night-500: oklch(0.61 0.04 286);
   --color-night-300: oklch(0.76 0.03 286);
   --color-night-100: oklch(0.94 0.012 286);
 

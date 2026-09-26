@@ -2,6 +2,14 @@ import { neon } from "@neondatabase/serverless";
 import { drizzle, type NeonHttpDatabase } from "drizzle-orm/neon-http";
 import * as schema from "./schema";
 
+/*
+  Sem o marcador `server-only` aqui, de propósito: os scripts de linha de
+  comando (seed, criar-professor) importam este módulo e o marcador os quebra,
+  porque não rodam dentro do servidor Next. A proteção fica uma camada acima —
+  todos os módulos de `db/queries/` são marcados, e é por eles que a aplicação
+  acessa o banco.
+*/
+
 /**
  * Driver HTTP do Neon, não TCP. Em serverless cada invocação abriria a própria
  * conexão e o limite do Postgres estoura rápido; o driver HTTP não mantém

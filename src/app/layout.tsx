@@ -43,7 +43,20 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="pt-BR" className={`${outfit.variable} ${inter.variable}`}>
-      <body className="min-h-dvh antialiased">{children}</body>
+      <body className="min-h-dvh antialiased">
+        {/*
+          Some por trás do conteúdo até receber foco (primeiro Tab da página).
+          Sem isso, quem navega por teclado passa pelo mesmo cabeçalho decorativo
+          em toda tela antes de chegar à pergunta ou ao formulário.
+        */}
+        <a
+          href="#conteudo"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-pill focus:bg-accent focus:px-5 focus:py-3 focus:text-sm focus:font-semibold focus:text-night-950"
+        >
+          Pular para o conteúdo
+        </a>
+        <div id="conteudo">{children}</div>
+      </body>
     </html>
   );
 }

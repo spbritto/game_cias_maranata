@@ -8,6 +8,7 @@ import {
   closestCenter,
   useSensor,
   useSensors,
+  type Announcements,
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
@@ -63,12 +64,33 @@ export function StepList({
     onChange(arrayMove(steps, from, to));
   }
 
+  /** Só cor e posição não bastam para quem usa leitor de tela. */
+  const label = (id: string) => {
+    const index = steps.findIndex((s) => s.id === id);
+    return index === -1 ? "" : `missão ${index + 1} de ${steps.length}`;
+  };
+
+  const announcements: Announcements = {
+    onDragStart: ({ active }) => `Pegou a ${label(String(active.id))}.`,
+    onDragOver: ({ active, over }) =>
+      over
+        ? `${label(String(active.id))} está sobre a ${label(String(over.id))}.`
+        : "",
+    onDragEnd: ({ active, over }) =>
+      over && active.id !== over.id
+        ? `${label(String(active.id))} movida para a posição da ${label(String(over.id))}.`
+        : `${label(String(active.id))} voltou ao lugar.`,
+    onDragCancel: ({ active }) =>
+      `Reordenação cancelada. ${label(String(active.id))} voltou ao lugar.`,
+  };
+
   return (
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
       modifiers={[restrictToVerticalAxis]}
       onDragEnd={handleDragEnd}
+      accessibility={{ announcements }}
     >
       <SortableContext
         items={steps.map((s) => s.id)}

@@ -1,22 +1,46 @@
 "use client";
 
-import { useState } from "react";
-import { Check, ExternalLink, Link2, MessageCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import QRCode from "qrcode";
+import { Check, Download, ExternalLink, Link2, MessageCircle } from "lucide-react";
 import { Button, Card } from "./ui";
 import { useOrigin } from "@/lib/use-origin";
 
 /**
- * Painel de compartilhamento do jogo publicado.
+ * Painel de compartilhamento do jogo publicado: link, WhatsApp e QR Code.
  *
- * QR Code fica para a Fase 5; aqui já entra o essencial para a aula acontecer:
- * copiar o link e mandar no grupo.
+ * Tudo gerado no navegador do professor — o QR Code nunca passa pelo servidor,
+ * então não existe rota nem cache para invalidar quando o link muda.
  */
 export function ShareCard({ slug }: { slug: string }) {
   const [copied, setCopied] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   // A origem real só existe no navegador: montar a URL no servidor daria o
   // endereço configurado no ambiente, e não aquele de onde o professor acessa.
   const origin = useOrigin();
   const url = origin ? `${origin}/jogar/${slug}` : "";
+
+  useEffect(() => {
+    if (!url) return;
+    let cancelled = false;
+
+    QRCode.toDataURL(url, {
+      width: 640,
+      margin: 2,
+      color: { dark: "#14101f", light: "#ffffff" },
+    })
+      .then((dataUrl) => {
+        if (!cancelled) setQrDataUrl(dataUrl);
+      })
+      .catch(() => {
+        // Sem QR Code o professor ainda tem o link e o botão do WhatsApp.
+        if (!cancelled) setQrDataUrl(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
 
   async function copy() {
     try {
@@ -75,6 +99,33 @@ export function ShareCard({ slug }: { slug: string }) {
           Abrir
         </a>
       </div>
+
+      {qrDataUrl ? (
+        <div className="flex flex-col items-center gap-3 border-t border-line pt-4">
+          <div className="rounded-field bg-white p-3">
+            {/* eslint-disable-next-line @next/next/no-img-element -- data URL gerada no navegador, next/image não se aplica */}
+            <img
+              src={qrDataUrl}
+              alt={`QR Code para ${url}`}
+              width={160}
+              height={160}
+              className="size-40"
+            />
+          </div>
+          <a
+            href={qrDataUrl}
+            download={`missao-${slug}.png`}
+            className="inline-flex min-h-touch items-center justify-center gap-2 rounded-pill border border-line bg-surface-raised px-5 text-sm font-semibold text-ink hover:border-line-strong"
+          >
+            <Download aria-hidden className="size-4" />
+            Baixar QR Code
+          </a>
+          <p className="text-center text-xs text-ink-subtle">
+            Bom para projetar na tela ou colar no quadro — quem apontar a
+            câmera do celular entra direto na missão.
+          </p>
+        </div>
+      ) : null}
     </Card>
   );
 }

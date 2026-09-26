@@ -27,5 +27,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/painel/:path*", "/jogos/:path*"],
+  matcher: ["/painel/:path*", "/jogos/:path*", "/conta/:path*"],
 };

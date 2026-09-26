@@ -1,10 +1,12 @@
+import Link from "next/link";
 import { Compass } from "lucide-react";
 import { Starfield } from "@/components/jogador/starfield";
 
 /**
- * Página raiz. Nesta primeira versão o adolescente chega direto pelo link da
- * missão, então aqui basta dizer o que isto é — sem botão para uma área que
- * ainda não existe. O acesso do professor entra na Fase 3.
+ * Página raiz. O adolescente chega direto pelo link da missão — esta tela é
+ * vista principalmente pelo professor, então o link para a área dele fica
+ * aqui. Não há cadastro aberto (decisão da seção 4 do plano): contas nascem
+ * por `npm run criar-professor`, e quem não tem uma só vê esta apresentação.
  */
 export default function Home() {
   return (
@@ -46,6 +48,14 @@ export default function Home() {
         >
           O link da missão chega pelo professor.
         </p>
+
+        <Link
+          href="/entrar"
+          className="enter mt-2 inline-flex min-h-touch w-fit items-center justify-center gap-2 rounded-pill border border-line bg-surface-raised px-6 text-sm font-semibold text-ink hover:border-line-strong hover:bg-surface-overlay"
+          style={{ "--i": 5 } as React.CSSProperties}
+        >
+          Sou professor
+        </Link>
       </main>
     </>
   );

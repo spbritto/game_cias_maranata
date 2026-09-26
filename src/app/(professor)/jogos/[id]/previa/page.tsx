@@ -23,7 +23,7 @@ type Props = { params: Promise<{ id: string }> };
  */
 export default function PreviaPage({ params }: Props) {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<PreviaSkeleton />}>
       <Preview params={params} />
     </Suspense>
   );
@@ -92,6 +92,18 @@ async function Preview({ params }: Props) {
         </main>
       )}
     </>
+  );
+}
+
+/** Mesmo formato da barra real, para não haver salto de layout ao carregar. */
+function PreviaSkeleton() {
+  return (
+    <div className="sticky top-0 z-20 border-b border-line bg-night-950/90">
+      <div className="mx-auto flex w-full max-w-md items-center justify-between gap-2 px-5 py-3">
+        <div className="h-4 w-28 animate-pulse rounded-pill bg-night-800" />
+        <div className="h-3 w-14 animate-pulse rounded-pill bg-night-800" />
+      </div>
+    </div>
   );
 }
 

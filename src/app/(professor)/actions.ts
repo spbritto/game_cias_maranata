@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { and, eq, notInArray, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { db } from "@/db/client";
-import { games, steps } from "@/db/schema";
+import { games, steps, teachers } from "@/db/schema";
 import { findTeacherByEmail } from "@/db/queries/teachers";
 import {
   findOwnedGame,
@@ -14,6 +14,7 @@ import {
 } from "@/db/queries/teacher-games";
 import { gameTag } from "@/db/queries/games";
 import { requireTeacher } from "@/lib/auth";
+import { verifyInviteCode } from "@/lib/invite";
 import { createSession, destroySession } from "@/lib/session";
 import {
   findPublishProblems,
@@ -69,17 +70,165 @@ export async function entrarAction(
   }
 
   await createSession(teacher.id);
+  redirect(safeInternalPath(destino));
+}
 
-  // Só caminho interno: `destino` vem da query string e não pode virar
-  // redirecionamento para fora do site.
-  const target =
-    destino.startsWith("/") && !destino.startsWith("//") ? destino : "/painel";
-  redirect(target);
+/**
+ * Caminho interno seguro para o redirecionamento pós-login.
+ *
+ * `destino` vem da query string, então um link forjado poderia mandar o
+ * professor para fora do site logo depois de um login legítimo — phishing com
+ * o aval do nosso domínio. Barra dupla vira URL protocol-relative, e o
+ * navegador normaliza contrabarra para barra, então `/\evil.com` também
+ * escaparia. Os dois casos caem fora, junto de caracteres de controle.
+ */
+function safeInternalPath(value: string): string {
+  const cleaned = value.replace(/[\u0000-\u001f\u007f]/g, "");
+  return /^\/(?![/\\])\S*$/.test(cleaned) ? cleaned : "/painel";
+}
+
+export type CadastroState = { error: string | null };
+
+/**
+ * Cadastro de professor pela própria tela de login, atrás de um código de
+ * convite (`TEACHER_INVITE_CODE`). Substitui `scripts/criar-professor.ts`
+ * como porta de entrada usual — o script continua existindo para quando não
+ * há acesso a ninguém que já tenha o código.
+ */
+export async function cadastrarAction(
+  _prev: CadastroState,
+  formData: FormData,
+): Promise<CadastroState> {
+  const name = String(formData.get("nome") ?? "").trim();
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
+  const password = String(formData.get("senha") ?? "");
+  const invite = String(formData.get("convite") ?? "");
+  const destino = String(formData.get("destino") ?? "");
+
+  if (!name || !email || !password || !invite) {
+    return { error: "Preencha todos os campos." };
+  }
+  if (password.length < 8) {
+    return { error: "A senha precisa ter pelo menos 8 caracteres." };
+  }
+  if (!verifyInviteCode(invite)) {
+    return { error: "Código de convite incorreto." };
+  }
+
+  // Diferente do login, aqui é normal dizer que o e-mail já existe: quem está
+  // se cadastrando se beneficia de saber que já tem conta, e ninguém aprende
+  // nada que um convite válido não desse acesso de qualquer forma.
+  const existing = await findTeacherByEmail(email);
+  if (existing) {
+    return { error: "Esse e-mail já tem cadastro. Tente entrar." };
+  }
+
+  const passwordHash = await bcrypt.hash(password, 12);
+
+  let teacher: { id: string };
+  try {
+    [teacher] = await db
+      .insert(teachers)
+      .values({ name, email, passwordHash })
+      .returning({ id: teachers.id });
+  } catch (error) {
+    // A checagem acima não fecha a janela entre duas pessoas cadastrando o
+    // mesmo e-mail ao mesmo tempo — quem perde a corrida esbarra na
+    // constraint `unique` do banco. Sem isso viraria erro 500 em vez de uma
+    // mensagem normal.
+    if (isUniqueViolation(error)) {
+      return { error: "Esse e-mail já tem cadastro. Tente entrar." };
+    }
+    throw error;
+  }
+
+  await createSession(teacher.id);
+  redirect(safeInternalPath(destino));
+}
+
+/**
+ * Código `23505` do Postgres: violação de restrição única.
+ *
+ * O Drizzle envolve o erro do driver num `DrizzleQueryError` — o código real
+ * fica em `error.cause.code`, não em `error.code`. Confirmado com um teste
+ * direto contra o Neon antes de confiar nisso; sem checar `.cause`, toda
+ * corrida de cadastro simultâneo com o mesmo e-mail viraria erro 500 em vez
+ * da mensagem amigável.
+ */
+function isUniqueViolation(error: unknown): boolean {
+  const code = (error as { code?: unknown; cause?: { code?: unknown } })?.code;
+  if (code === "23505") return true;
+
+  const causeCode = (error as { cause?: { code?: unknown } })?.cause?.code;
+  return causeCode === "23505";
 }
 
 export async function sairAction(): Promise<void> {
   await destroySession();
   redirect("/entrar");
+}
+
+export type AlterarSenhaState = { error: string | null; success: boolean };
+
+/**
+ * Troca a senha do professor logado. Não é `sairAction` — a sessão atual
+ * continua valendo depois (não há tabela de sessões para revogar as outras,
+ * a mesma limitação que `session.ts` já documenta: só trocar `AUTH_SECRET`
+ * derruba todo mundo de uma vez).
+ */
+export async function alterarSenhaAction(
+  _prev: AlterarSenhaState,
+  formData: FormData,
+): Promise<AlterarSenhaState> {
+  const teacher = await requireTeacher();
+
+  const atual = String(formData.get("senhaAtual") ?? "");
+  const nova = String(formData.get("novaSenha") ?? "");
+  const confirmacao = String(formData.get("confirmacao") ?? "");
+
+  if (!atual || !nova || !confirmacao) {
+    return { error: "Preencha todos os campos.", success: false };
+  }
+  if (nova.length < 8) {
+    return {
+      error: "A nova senha precisa ter pelo menos 8 caracteres.",
+      success: false,
+    };
+  }
+  if (nova !== confirmacao) {
+    return { error: "A confirmação não bate com a nova senha.", success: false };
+  }
+
+  // `requireTeacher()` não devolve o hash (é a interface pública do
+  // professor); busca-se a linha completa aqui, só para comparar a senha.
+  const [row] = await db
+    .select({ passwordHash: teachers.passwordHash })
+    .from(teachers)
+    .where(eq(teachers.id, teacher.id));
+
+  const matches = await bcrypt
+    .compare(atual, row?.passwordHash ?? DUMMY_HASH)
+    .catch(() => false);
+
+  if (!row || !matches) {
+    return { error: "A senha atual não confere.", success: false };
+  }
+  if (atual === nova) {
+    return {
+      error: "A nova senha precisa ser diferente da atual.",
+      success: false,
+    };
+  }
+
+  const passwordHash = await bcrypt.hash(nova, 12);
+  await db
+    .update(teachers)
+    .set({ passwordHash, updatedAt: new Date() })
+    .where(eq(teachers.id, teacher.id));
+
+  return { error: null, success: true };
 }
 
 // --- jogos ----------------------------------------------------------------

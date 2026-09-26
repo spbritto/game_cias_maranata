@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import {
+  AlertTriangle,
   Check,
   Copy,
   ExternalLink,
@@ -22,6 +23,8 @@ import {
   reabrirJogoAction,
 } from "@/app/(professor)/actions";
 
+const GENERIC_ERROR = "Algo deu errado. Tente de novo em instantes.";
+
 export function GameList({ games }: { games: GameSummary[] }) {
   return (
     <ul className="flex flex-col gap-3">
@@ -37,6 +40,23 @@ export function GameList({ games }: { games: GameSummary[] }) {
 function GameRow({ game }: { game: GameSummary }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  /**
+   * Toda ação passa por aqui. `redirect()` dentro de uma Server Action (usado
+   * por duplicar e excluir) não é afetado por este try/catch — ele só
+   * intercepta uma falha de verdade (rede caída, banco fora do ar).
+   */
+  function run(action: () => Promise<void>) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await action();
+      } catch {
+        setError(GENERIC_ERROR);
+      }
+    });
+  }
 
   return (
     <article className="rounded-card border border-line bg-surface-raised p-5">
@@ -78,36 +98,48 @@ function GameRow({ game }: { game: GameSummary }) {
       </div>
 
       {open ? (
-        <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-4">
-          <Button
-            disabled={pending}
-            onClick={() => startTransition(() => duplicarJogoAction(game.id))}
-          >
-            <Copy aria-hidden className="size-4" />
-            Duplicar
-          </Button>
-
-          {game.status === "published" ? (
+        <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4">
+          <div className="flex flex-wrap gap-2">
             <Button
               disabled={pending}
-              onClick={() => startTransition(() => encerrarJogoAction(game.id))}
+              onClick={() => run(() => duplicarJogoAction(game.id))}
             >
-              <Power aria-hidden className="size-4" />
-              Encerrar
+              <Copy aria-hidden className="size-4" />
+              Duplicar
             </Button>
-          ) : null}
 
-          {game.status === "closed" ? (
-            <Button
-              disabled={pending}
-              onClick={() => startTransition(() => reabrirJogoAction(game.id))}
+            {game.status === "published" ? (
+              <Button
+                disabled={pending}
+                onClick={() => run(() => encerrarJogoAction(game.id))}
+              >
+                <Power aria-hidden className="size-4" />
+                Encerrar
+              </Button>
+            ) : null}
+
+            {game.status === "closed" ? (
+              <Button
+                disabled={pending}
+                onClick={() => run(() => reabrirJogoAction(game.id))}
+              >
+                <Power aria-hidden className="size-4" />
+                Reabrir
+              </Button>
+            ) : null}
+
+            <DeleteButton game={game} pending={pending} run={run} />
+          </div>
+
+          {error ? (
+            <p
+              role="alert"
+              className="flex items-center gap-2 text-sm text-red-300"
             >
-              <Power aria-hidden className="size-4" />
-              Reabrir
-            </Button>
+              <AlertTriangle aria-hidden className="size-4 shrink-0" />
+              {error}
+            </p>
           ) : null}
-
-          <DeleteButton game={game} pending={pending} start={startTransition} />
         </div>
       ) : null}
     </article>
@@ -162,11 +194,11 @@ function ShareLink({ slug }: { slug: string }) {
 function DeleteButton({
   game,
   pending,
-  start,
+  run,
 }: {
   game: GameSummary;
   pending: boolean;
-  start: (fn: () => void) => void;
+  run: (action: () => Promise<void>) => void;
 }) {
   return (
     <Button
@@ -176,7 +208,7 @@ function DeleteButton({
         const ok = window.confirm(
           `Excluir "${game.title}" e todas as suas missões? Isso não tem como desfazer.`,
         );
-        if (ok) start(() => excluirJogoAction(game.id));
+        if (ok) run(() => excluirJogoAction(game.id));
       }}
     >
       <Trash2 aria-hidden className="size-4" />

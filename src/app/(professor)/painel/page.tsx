@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { KeyRound, Plus } from "lucide-react";
 import { Starfield } from "@/components/jogador/starfield";
 import { Button } from "@/components/professor/ui";
 import { GameList } from "@/components/professor/game-list";
@@ -32,6 +32,13 @@ export default function PainelPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <Link
+              href="/conta"
+              className="inline-flex min-h-touch items-center justify-center gap-2 rounded-pill border border-line bg-surface-raised px-5 text-sm font-semibold text-ink hover:border-line-strong"
+            >
+              <KeyRound aria-hidden className="size-4" />
+              Minha conta
+            </Link>
             <form action={sairAction}>
               <Button type="submit">Sair</Button>
             </form>

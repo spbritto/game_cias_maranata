@@ -11,6 +11,8 @@ import {
   Eye,
   Loader2,
   Plus,
+  Power,
+  RefreshCw,
   Rocket,
 } from "lucide-react";
 import { StepList, type EditorStep } from "./step-list";
@@ -18,7 +20,9 @@ import { Button, Card, Field, Select, StatusBadge, TextArea, TextInput } from ".
 import { useAutosave } from "./use-autosave";
 import { ShareCard } from "./share-card";
 import {
+  encerrarJogoAction,
   publicarJogoAction,
+  reabrirJogoAction,
   salvarJogoAction,
   type PublishResult,
 } from "@/app/(professor)/actions";
@@ -50,7 +54,10 @@ export function GameEditor({ record }: { record: GameDraftRecord }) {
   const [status, setStatus] = useState(record.status);
   const [slug, setSlug] = useState(record.slug);
   const [publishResult, setPublishResult] = useState<PublishResult | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
   const [publishing, startPublishing] = useTransition();
+  const [togglingStatus, startTogglingStatus] = useTransition();
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   const draft = useMemo(
     () => ({ info, steps: steps.map((s) => ({ id: s.id, data: s.data })), conclusion }),
@@ -61,7 +68,10 @@ export function GameEditor({ record }: { record: GameDraftRecord }) {
     (value: typeof draft) => salvarJogoAction(record.id, value),
     [record.id],
   );
-  const { status: saveStatus, error: saveError } = useAutosave(draft, save);
+  const { status: saveStatus, error: saveError, retry: retrySave } = useAutosave(
+    draft,
+    save,
+  );
 
   function addStep(type: StepType) {
     setSteps((current) => [
@@ -73,12 +83,36 @@ export function GameEditor({ record }: { record: GameDraftRecord }) {
   }
 
   function publish() {
+    setPublishError(null);
     startPublishing(async () => {
-      const result = await publicarJogoAction(record.id, draft);
-      setPublishResult(result);
-      if (result.ok && result.slug) {
-        setSlug(result.slug);
-        setStatus("published");
+      try {
+        const result = await publicarJogoAction(record.id, draft);
+        setPublishResult(result);
+        if (result.ok && result.slug) {
+          setSlug(result.slug);
+          setStatus("published");
+        }
+      } catch {
+        // Sem isso, uma falha de rede aqui deixava o botão girando para
+        // sempre, sem nenhuma explicação do que aconteceu.
+        setPublishError(
+          "Não consegui publicar agora — parece um problema de conexão. Tente de novo em instantes.",
+        );
+      }
+    });
+  }
+
+  function toggleStatus() {
+    setStatusError(null);
+    const action = status === "closed" ? reabrirJogoAction : encerrarJogoAction;
+    const next = status === "closed" ? "published" : "closed";
+
+    startTogglingStatus(async () => {
+      try {
+        await action(record.id);
+        setStatus(next);
+      } catch {
+        setStatusError("Não consegui atualizar o status agora. Tente de novo.");
       }
     });
   }
@@ -101,12 +135,20 @@ export function GameEditor({ record }: { record: GameDraftRecord }) {
         </div>
 
         {saveError ? (
-          <p
+          <div
             role="alert"
-            className="rounded-field border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-field border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300"
           >
-            {saveError}
-          </p>
+            <span>{saveError}</span>
+            <button
+              type="button"
+              onClick={retrySave}
+              className="inline-flex min-h-touch items-center gap-1.5 font-semibold text-red-200 underline-offset-2 hover:underline"
+            >
+              <RefreshCw aria-hidden className="size-3.5" />
+              Tentar de novo
+            </button>
+          </div>
         ) : null}
       </header>
 
@@ -326,7 +368,43 @@ export function GameEditor({ record }: { record: GameDraftRecord }) {
             )}
             {status === "draft" ? "Publicar" : "Republicar"}
           </Button>
+
+          {status !== "draft" ? (
+            <Button onClick={toggleStatus} disabled={togglingStatus}>
+              {togglingStatus ? (
+                <Loader2 aria-hidden className="size-4 animate-spin" />
+              ) : (
+                <Power aria-hidden className="size-4" />
+              )}
+              {status === "closed" ? "Reabrir" : "Encerrar"}
+            </Button>
+          ) : null}
         </div>
+
+        {publishError ? (
+          <p
+            role="alert"
+            className="rounded-field border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300"
+          >
+            {publishError}
+          </p>
+        ) : null}
+
+        {statusError ? (
+          <p
+            role="alert"
+            className="rounded-field border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300"
+          >
+            {statusError}
+          </p>
+        ) : null}
+
+        {status === "closed" ? (
+          <p className="text-xs text-ink-subtle">
+            Encerrado: quem tem o link vê um aviso em vez do jogo. Reabrir
+            libera o mesmo link de novo.
+          </p>
+        ) : null}
 
         {publishResult?.problems?.length ? (
           <Card className="border-ember-500/40 bg-ember-500/[0.06]">

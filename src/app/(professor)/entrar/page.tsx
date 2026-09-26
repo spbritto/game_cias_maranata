@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { Starfield } from "@/components/jogador/starfield";
-import { LoginForm } from "./login-form";
+import { AuthTabs } from "./auth-tabs";
 
 export const metadata: Metadata = { title: "Entrar" };
 
@@ -20,32 +20,35 @@ export default function LoginPage({ searchParams }: Props) {
             Entrar
           </h1>
           <p className="text-sm text-ink-muted">
-            Não há cadastro aberto. Se você ainda não tem acesso, peça para quem
-            administra o sistema.
+            Cadastro de professor é feito com um código de convite — peça para
+            quem administra o sistema.
           </p>
         </div>
 
         {/* `searchParams` é dado de requisição: com Cache Components, só sob
             Suspense — assim o resto da tela sai do shell estático. */}
         <Suspense fallback={<FormSkeleton />}>
-          <FormWithDestination searchParams={searchParams} />
+          <TabsWithDestination searchParams={searchParams} />
         </Suspense>
       </main>
     </>
   );
 }
 
-async function FormWithDestination({ searchParams }: Props) {
+async function TabsWithDestination({ searchParams }: Props) {
   const { destino } = await searchParams;
-  return <LoginForm destino={destino ?? ""} />;
+  return <AuthTabs destino={destino ?? ""} />;
 }
 
 function FormSkeleton() {
   return (
-    <div className="flex animate-pulse flex-col gap-5">
-      <div className="h-touch rounded-field bg-night-800" />
-      <div className="h-touch rounded-field bg-night-800" />
+    <div className="flex animate-pulse flex-col gap-6">
       <div className="h-touch rounded-pill bg-night-800" />
+      <div className="flex flex-col gap-5">
+        <div className="h-touch rounded-field bg-night-800" />
+        <div className="h-touch rounded-field bg-night-800" />
+        <div className="h-touch rounded-pill bg-night-800" />
+      </div>
     </div>
   );
 }
