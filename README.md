@@ -10,9 +10,10 @@ conversa continua na sala.
 
 ## Estado atual
 
-Primeira versão apresentável: a experiência do adolescente está completa, com o
-jogo **Propósito** publicado em `/jogar/proposito-7H3K`. A área do professor
-(login, editor, publicação) vem nas próximas fases.
+Experiência do adolescente e área do professor completas: login e cadastro
+(por código de convite), painel, editor com autosave, publicação, QR Code e
+troca de senha. O jogo **Propósito** está publicado em `/jogar/proposito-7H3K`
+como cenário de validação.
 
 ## Stack
 
@@ -42,21 +43,35 @@ mexer no visual. Só existe em desenvolvimento.
 | Variável | Obrigatória | Para quê |
 |---|---|---|
 | `DATABASE_URL` | sim | Connection string do Neon (usar a **pooled**) |
-| `AUTH_SECRET` | a partir da Fase 3 | Assina o cookie de sessão do professor |
+| `AUTH_SECRET` | sim | Assina o cookie de sessão do professor |
+| `TEACHER_INVITE_CODE` | sim, para cadastro | Código exigido na aba "Criar conta" de `/entrar`. Sem ele, o cadastro sempre recusa (de propósito) |
 | `NEXT_PUBLIC_APP_URL` | não | Só para domínio próprio. Na Vercel, a URL de produção é detectada sozinha |
 
 ## Deploy na Vercel
 
 1. Importe o repositório na Vercel. Framework: Next.js, sem configuração extra.
-2. Em **Settings → Environment Variables**, adicione `DATABASE_URL` com a
-   connection string pooled do Neon (o mesmo banco já migrado e semeado
-   localmente — não há passo de migração no deploy).
-3. Faça o deploy. O link para os adolescentes é
+2. Em **Settings → Environment Variables**, adicione `DATABASE_URL` (connection
+   string pooled do Neon — o mesmo banco já migrado e semeado localmente, não
+   há passo de migração no deploy), `AUTH_SECRET` e `TEACHER_INVITE_CODE`.
+3. Em **Settings → Deployment Protection**, desligue a proteção para
+   Production (ou deixe só "Only Preview Deployments"). **Isso não é opcional**:
+   ligada, ela bloqueia com um SSO da própria Vercel *qualquer* acesso sem login
+   na conta do projeto — inclusive o link do jogo que o adolescente abre pelo
+   WhatsApp.
+4. Faça o deploy. O link para os adolescentes é
    `https://<seu-projeto>.vercel.app/jogar/proposito-7H3K`.
 
 Para conferir o preview do link antes de mandar no grupo, cole a URL em
 https://developers.facebook.com/tools/debug/ — o WhatsApp usa o mesmo
 mecanismo de `og:` tags.
+
+### Mudou uma variável de ambiente depois do deploy?
+
+A Vercel não aplica a mudança ao deployment que já está no ar — só ao
+**próximo** build. Depois de adicionar ou alterar qualquer variável, vá em
+**Deployments**, abra o menu (⋯) do deployment mais recente e clique em
+**Redeploy**. Sem isso, o código continua rodando com o valor antigo (ou
+ausente), mesmo que o painel da Vercel já mostre o valor novo.
 
 ### O que esperar no primeiro acesso
 
