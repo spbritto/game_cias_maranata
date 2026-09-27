@@ -312,7 +312,7 @@ Conclusão ganha recap das respostas + botão "Mandar pro professor" (deep link 
 
 Pedido do Samuel depois da primeira aula real. Três fases com checkpoint.
 
-**Fase A — login lembrado, aulas compartilhadas, domingo da aula** ✅ código pronto (não commitado — aguardando revisão)
+**Fase A — login lembrado, aulas compartilhadas, domingo da aula** ✅ (commit `ffd51fc`)
 - [x] "Lembrar meu e-mail neste aparelho" no login (`localStorage`, só o e-mail); o cadastro também lembra
 - [x] Aulas compartilhadas: `listAllGames()`, `getGameDraft(id)` e `findGame(id)` sem filtro de dono; excluir só pelo autor (`canDeleteGame`), botão escondido para os outros
 - [x] Trava otimista: `game.version`, checada e incrementada no mesmo `UPDATE`; conflito para o autosave e pede recarga
@@ -321,7 +321,13 @@ Pedido do Samuel depois da primeira aula real. Três fases com checkpoint.
 - [x] Tela de abertura do adolescente mostra "4ª aula · 27 de setembro"
 - [x] Migração `0001` aplicada no Neon
 
-**Fase B — criar aula a partir do PDF (OpenAI)** — pendente
+**Fase B — criar aula a partir do PDF (OpenAI)** ✅ código pronto (não commitado — aguardando revisão)
+- [x] `/jogos/nova`: "Criar a partir do PDF da aula" (destaque) ou "Aula em branco"; o painel aponta para cá
+- [x] `gerarAulaComIaAction`: valida o PDF pela assinatura `%PDF-` e o tamanho (≤ 4 MB), gera, grava como rascunho e abre o editor com o aviso "revise antes de publicar"
+- [x] `src/lib/ai/`: schema de saída para structured outputs estrito, prompt com as regras do produto, chamada à Responses API com o PDF como `input_file`, conversão para rascunho
+- [x] `OPENAI_API_KEY` / `OPENAI_MODEL` (padrão `gpt-5-mini`); `serverActions.bodySizeLimit: "4mb"`; `maxDuration = 120` na página
+- [x] `npm run testar-geracao` para afinar o prompt sem interface
+- [ ] Upload pelo navegador de verdade — depende do Samuel (a sessão não tem navegador)
 **Fase C — editor mais enxuto** — pendente
 
 ### Fora do MVP, por decisão
@@ -364,7 +370,18 @@ professor conduz a discussão a partir da experiência
 
 Mudanças feitas depois que o plano foi aprovado, com o motivo. O plano acima já está corrigido; esta seção existe para que a diferença não se perca.
 
-### 2026-09-27 — Rodada 2, Fase A (ainda não commitada)
+### 2026-09-27 — Rodada 2, Fase B (ainda não commitada)
+
+- **PDF direto para a OpenAI, sem extrair texto aqui.** A Responses API aceita o PDF como `input_file` e lê texto e página; uma biblioteca de extração seria dependência a mais e perderia a formatação (negrito, itálico dos versículos). O PDF não é guardado em lugar nenhum, e a chamada vai com `store: false`.
+- **Schema da IA separado do `stepDataSchema`.** O modo estrito de structured outputs exige todo campo obrigatório (`nullable` no lugar de `optional`) e não aceita todos os limites do JSON Schema. Os limites viram orientação nas descrições e são aplicados de fato em `to-draft.ts`, que corta no tamanho do rascunho. Conferido que o JSON Schema gerado não usa `oneOf`/`$ref`/limites de tamanho.
+- **Resultado entra como rascunho**, nunca publicado: o que a IA errar aparece na checagem de publicação de sempre.
+- **Regra de versículo é a mais importante do prompt:** só texto citado literalmente no PDF; referência sem texto fica sem texto. Testado com a aula de 27/09 (3 gerações, 20–28s cada, `gpt-5-mini`): todos os versículos saíram idênticos ao PDF, inclusive Dt 18:10-12 com as reticências do original; data, nº, tema e título certos; nenhuma pendência de publicação.
+- **Dois ajustes de prompt vindos do teste real:** a IA listava as alternativas dentro da pergunta (repetia o que já aparece embaixo) e deixou de fora o exemplo do Halloween, o mais concreto da aula. Depois do ajuste, o Halloween virou missão com Dt 18:10-12. Ainda acontece de um versículo aparecer em duas missões — aceito, é edição de um clique.
+- **Sem `server-only` em `src/lib/ai/generate-lesson.ts`**, pelo mesmo motivo de `db/client.ts`: o script de teste roda fora do Next. A chave não chega ao navegador de qualquer forma (sem prefixo `NEXT_PUBLIC_`, módulo só importado por Server Action).
+- **Envio do formulário por transition, não por `action={...}`**: com `action`, o React 19 limpa o formulário depois da resposta e, após um erro da IA, o professor teria de escolher o arquivo de novo.
+- **PDFs de aula no `.gitignore`**: o material é da igreja e não precisa estar no repositório.
+
+### 2026-09-27 — Rodada 2, Fase A (commit `ffd51fc`)
 
 - **Aulas compartilhadas reverte o isolamento por professor da Fase 3.** Pedido explícito: "controle compartilhado". O que isso muda em segurança: qualquer pessoa com conta (ou seja, com o código de convite) edita qualquer aula. Excluir ficou com o autor por decisão do Samuel, porque apaga as missões sem volta.
 - **`game.teacher_id` passou de `cascade` para `set null`** (e virou nullable). Com aulas coletivas, apagar um professor levaria junto aulas que são de todos — exatamente o que já aconteceu uma vez (registro de 2026-09-26). Aula sem autor pode ser excluída por qualquer professor, senão ninguém mais conseguiria.

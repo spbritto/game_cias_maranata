@@ -12,8 +12,11 @@ conversa continua na sala.
 
 Experiência do adolescente e área do professor completas: login e cadastro
 (por código de convite), painel, editor com autosave, publicação, QR Code e
-troca de senha. O jogo **Propósito** está publicado em `/jogar/proposito-7H3K`
-como cenário de validação.
+troca de senha. As aulas são compartilhadas entre todos os professores e
+identificadas pelo domingo do mês ("4ª aula · 27/09"). Uma aula pode ser
+**gerada a partir do PDF da aula escrita** pela OpenAI e revisada no editor
+antes de publicar. O jogo **Propósito** está publicado em
+`/jogar/proposito-7H3K` como cenário de validação.
 
 ## Stack
 
@@ -45,6 +48,8 @@ mexer no visual. Só existe em desenvolvimento.
 | `DATABASE_URL` | sim | Connection string do Neon (usar a **pooled**) |
 | `AUTH_SECRET` | sim | Assina o cookie de sessão do professor |
 | `TEACHER_INVITE_CODE` | sim, para cadastro | Código exigido na aba "Criar conta" de `/entrar`. Sem ele, o cadastro sempre recusa (de propósito) |
+| `OPENAI_API_KEY` | sim, para gerar por IA | Chave da OpenAI usada em "Criar a partir do PDF". Só no servidor |
+| `OPENAI_MODEL` | não | Modelo da geração. Padrão: `gpt-5-mini` |
 | `NEXT_PUBLIC_APP_URL` | não | Só para domínio próprio. Na Vercel, a URL de produção é detectada sozinha |
 
 ## Deploy na Vercel
@@ -52,7 +57,9 @@ mexer no visual. Só existe em desenvolvimento.
 1. Importe o repositório na Vercel. Framework: Next.js, sem configuração extra.
 2. Em **Settings → Environment Variables**, adicione `DATABASE_URL` (connection
    string pooled do Neon — o mesmo banco já migrado e semeado localmente, não
-   há passo de migração no deploy), `AUTH_SECRET` e `TEACHER_INVITE_CODE`.
+   há passo de migração no deploy — rode `npm run db:migrate` localmente antes
+   de publicar uma versão com migração nova), `AUTH_SECRET`,
+   `TEACHER_INVITE_CODE` e `OPENAI_API_KEY`.
 3. Em **Settings → Deployment Protection**, desligue a proteção para
    Production (ou deixe só "Only Preview Deployments"). **Isso não é opcional**:
    ligada, ela bloqueia com um SSO da própria Vercel *qualquer* acesso sem login
@@ -91,6 +98,7 @@ e não tocam no banco. Se for apresentar em sala, abra o link uma vez antes.
 | `npm run db:migrate` | Aplica migrações no Neon |
 | `npm run db:seed` | Recria o jogo Propósito (idempotente, mantém o slug) |
 | `npm run db:studio` | Drizzle Studio |
+| `npm run testar-geracao -- aula.pdf` | Gera uma aula a partir do PDF sem banco nem interface, para conferir o resultado da IA (custa uma chamada à OpenAI) |
 
 ## Estrutura
 

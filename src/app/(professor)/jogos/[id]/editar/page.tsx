@@ -8,21 +8,25 @@ import { getCurrentTeacher } from "@/lib/auth";
 
 export const metadata: Metadata = { title: "Editar aula" };
 
-type Props = { params: Promise<{ id: string }> };
+type Props = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ gerada?: string }>;
+};
 
-export default function EditarPage({ params }: Props) {
+export default function EditarPage({ params, searchParams }: Props) {
   return (
     <>
       <Starfield />
       <Suspense fallback={<EditorSkeleton />}>
-        <Editor params={params} />
+        <Editor params={params} searchParams={searchParams} />
       </Suspense>
     </>
   );
 }
 
-async function Editor({ params }: Props) {
+async function Editor({ params, searchParams }: Props) {
   const { id } = await params;
+  const { gerada } = await searchParams;
   // Sessão exigida mesmo sem filtrar por dono: as aulas são compartilhadas
   // entre professores, mas continuam fechadas para quem não entrou.
   await getCurrentTeacher();
@@ -30,7 +34,7 @@ async function Editor({ params }: Props) {
   const draft = await getGameDraft(id);
   if (!draft) notFound();
 
-  return <GameEditor record={draft} />;
+  return <GameEditor record={draft} generated={gerada === "1"} />;
 }
 
 function EditorSkeleton() {

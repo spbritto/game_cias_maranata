@@ -7,7 +7,7 @@ import { Button } from "@/components/professor/ui";
 import { GameList } from "@/components/professor/game-list";
 import { canDeleteGame, listAllGames } from "@/db/queries/teacher-games";
 import { getCurrentTeacher } from "@/lib/auth";
-import { criarJogoAction, sairAction } from "../actions";
+import { sairAction } from "../actions";
 
 export const metadata: Metadata = { title: "Painel" };
 
@@ -42,12 +42,13 @@ export default function PainelPage() {
             <form action={sairAction}>
               <Button type="submit">Sair</Button>
             </form>
-            <form action={criarJogoAction}>
-              <Button type="submit" variant="primary">
-                <Plus aria-hidden className="size-4" />
-                Nova aula
-              </Button>
-            </form>
+            <Link
+              href="/jogos/nova"
+              className="inline-flex min-h-touch items-center justify-center gap-2 rounded-pill bg-accent px-5 text-sm font-semibold text-night-950 hover:bg-accent-soft"
+            >
+              <Plus aria-hidden className="size-4" />
+              Nova aula
+            </Link>
           </div>
         </header>
 
@@ -73,15 +74,16 @@ async function Games() {
           Nenhuma aula por aqui ainda
         </h2>
         <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-ink-muted">
-          Comece por um tema — uma pergunta que você gostaria que a turma
-          levasse para casa — e monte as missões a partir dele.
+          Envie o PDF da aula escrita e a IA monta as missões para você
+          revisar — ou comece uma em branco.
         </p>
-        <form action={criarJogoAction} className="mt-6">
-          <Button type="submit" variant="primary">
-            <Plus aria-hidden className="size-4" />
-            Criar a primeira aula
-          </Button>
-        </form>
+        <Link
+          href="/jogos/nova"
+          className="mt-6 inline-flex min-h-touch items-center justify-center gap-2 rounded-pill bg-accent px-5 text-sm font-semibold text-night-950 hover:bg-accent-soft"
+        >
+          <Plus aria-hidden className="size-4" />
+          Criar a primeira aula
+        </Link>
       </div>
     );
   }

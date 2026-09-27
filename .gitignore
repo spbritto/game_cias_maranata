@@ -42,3 +42,7 @@ next-env.d.ts
 
 # o template deve ser versionado; os arquivos com segredo nao
 !.env.example
+
+# Material das aulas (PDFs) e saida do scripts/testar-geracao.ts
+*.pdf
+geracao-teste.json

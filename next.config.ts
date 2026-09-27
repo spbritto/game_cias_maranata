@@ -6,6 +6,14 @@ const nextConfig: NextConfig = {
   // no Neon a cada acesso. Ver .claude/plans/PLANO_EXECUCAO.md secao 2.
   cacheComponents: true,
 
+  experimental: {
+    serverActions: {
+      // Upload do PDF da aula para a geração por IA (padrão é 1 MB). Fica
+      // abaixo dos 4,5 MB que a Vercel aceita no corpo da requisição.
+      bodySizeLimit: "4mb",
+    },
+  },
+
   async headers() {
     return [
       {

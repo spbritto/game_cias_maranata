@@ -15,6 +15,8 @@ import {
   Power,
   RefreshCw,
   Rocket,
+  Sparkles,
+  X,
 } from "lucide-react";
 import { StepList, type EditorStep } from "./step-list";
 import { Button, Card, Field, Select, StatusBadge, TextArea, TextInput } from "./ui";
@@ -47,7 +49,15 @@ type Info = GameDraftRecord["info"];
  * precisa estar levantado de qualquer jeito, e uma segunda fonte de verdade
  * só criaria divergência.
  */
-export function GameEditor({ record }: { record: GameDraftRecord }) {
+export function GameEditor({
+  record,
+  generated = false,
+}: {
+  record: GameDraftRecord;
+  /** Veio da geração por IA: mostra o aviso de revisar antes de publicar. */
+  generated?: boolean;
+}) {
+  const [showGenerated, setShowGenerated] = useState(generated);
   const [info, setInfo] = useState<Info>(record.info);
   const [steps, setSteps] = useState<EditorStep[]>(record.steps);
   const [conclusion, setConclusion] = useState<ConclusionDraft>(
@@ -184,6 +194,30 @@ export function GameEditor({ record }: { record: GameDraftRecord }) {
           </div>
         ) : null}
       </header>
+
+      {showGenerated ? (
+        <div className="mt-6 flex items-start gap-3 rounded-card border border-ember-500/40 bg-ember-500/[0.06] p-4">
+          <Sparkles aria-hidden className="mt-0.5 size-5 shrink-0 text-ember-400" />
+          <div className="min-w-0 flex-1 text-sm leading-relaxed text-ink-muted">
+            <p className="font-semibold text-ink">
+              Aula gerada a partir do PDF
+            </p>
+            <p className="mt-1">
+              Revise as missões antes de publicar — principalmente as
+              reflexões de cada alternativa e os versículos. Use “Ver como
+              fica” para jogar como a turma vai jogar.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowGenerated(false)}
+            aria-label="Fechar aviso"
+            className="flex size-9 shrink-0 items-center justify-center rounded-full text-ink-subtle hover:text-ink"
+          >
+            <X aria-hidden className="size-4" />
+          </button>
+        </div>
+      ) : null}
 
       <section className="mt-8 flex flex-col gap-5">
         <h1 className="text-2xl font-semibold text-ink">A aula</h1>

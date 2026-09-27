@@ -27,6 +27,8 @@ import {
 import type { ConclusionDraft } from "@/lib/schemas/step-draft";
 import { buildGameSlug } from "@/lib/slug";
 import { nextSunday, sundayOrdinal, todayInBrazil } from "@/lib/lesson-date";
+import { generateLesson } from "@/lib/ai/generate-lesson";
+import { lessonToDraft } from "@/lib/ai/to-draft";
 
 /**
  * Toda ação relê a sessão por `requireTeacher()` antes de escrever — nenhuma
@@ -562,6 +564,83 @@ export async function excluirJogoAction(gameId: string): Promise<void> {
   updateTag(allGamesTag);
   if (found.slug) revalidateTag(gameTag(found.slug), "max");
   redirect("/painel");
+}
+
+// --- criação por IA -------------------------------------------------------
+
+export type GerarAulaState = { error: string | null };
+
+/**
+ * Limite do PDF. A Vercel corta o corpo da requisição em 4,5 MB, e o
+ * `serverActions.bodySizeLimit` do `next.config.ts` está em 4 MB para a
+ * recusa sair daqui, com mensagem, e não da plataforma. Uma aula escrita tem
+ * algumas centenas de kB.
+ */
+const MAX_PDF_BYTES = 4 * 1024 * 1024 - 64 * 1024;
+
+/**
+ * Cria a aula a partir do PDF da aula escrita. A IA monta as missões, o
+ * resultado entra como RASCUNHO e o professor cai no editor para revisar —
+ * publicar continua sendo um passo dele, com a mesma checagem de sempre.
+ *
+ * O PDF não é guardado: vai para a OpenAI e é descartado.
+ */
+export async function gerarAulaComIaAction(
+  _prev: GerarAulaState,
+  formData: FormData,
+): Promise<GerarAulaState> {
+  const teacher = await requireTeacher();
+
+  const file = formData.get("pdf");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "Escolha o PDF da aula." };
+  }
+  if (file.size > MAX_PDF_BYTES) {
+    return { error: "Esse PDF passa de 4 MB. A aula escrita costuma ter bem menos — confira se é o arquivo certo." };
+  }
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  // Pela assinatura, não pela extensão nem pelo tipo que o navegador diz.
+  if (!isPdf(bytes)) {
+    return { error: "Esse arquivo não é um PDF." };
+  }
+
+  const result = await generateLesson(bytes, file.name);
+  if (!result.ok) return { error: result.error };
+
+  const draft = lessonToDraft(result.lesson, upcomingLesson().lessonDate);
+
+  const [game] = await db
+    .insert(games)
+    .values({
+      teacherId: teacher.id,
+      updatedById: teacher.id,
+      ...draft.info,
+      conclusion: conclusionForStorage(draft.conclusion),
+      status: "draft",
+    })
+    .returning({ id: games.id });
+
+  if (draft.steps.length) {
+    await db.insert(steps).values(
+      draft.steps.map((step, index) => ({
+        id: step.id,
+        gameId: game.id,
+        position: index,
+        type: step.data.type,
+        data: step.data,
+      })),
+    );
+  }
+
+  updateTag(allGamesTag);
+  redirect(`/jogos/${game.id}/editar?gerada=1`);
+}
+
+/** "%PDF-" nos primeiros bytes. */
+function isPdf(bytes: Uint8Array): boolean {
+  const signature = [0x25, 0x50, 0x44, 0x46, 0x2d];
+  return signature.every((byte, i) => bytes[i] === byte);
 }
 
 // --- auxiliares -----------------------------------------------------------
