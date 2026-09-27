@@ -1,10 +1,18 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState, useSyncExternalStore } from "react";
 import { useFormStatus } from "react-dom";
 import { LogIn } from "lucide-react";
 import { entrarAction, type LoginState } from "../actions";
 import { Button, Field, TextInput } from "@/components/professor/ui";
+import {
+  forgetEmail,
+  readRememberedEmail,
+  rememberEmail,
+} from "@/lib/remembered-email";
+
+/** O e-mail lembrado não muda por fora durante a vida desta tela. */
+const noSubscribe = () => () => {};
 
 export function LoginForm({ destino }: { destino: string }) {
   const [state, formAction] = useActionState<LoginState, FormData>(
@@ -12,8 +20,32 @@ export function LoginForm({ destino }: { destino: string }) {
     { error: null },
   );
 
+  /*
+    `localStorage` só existe no navegador: no servidor (e na hidratação) isto é
+    null, e logo depois vira o e-mail lembrado. O `key` abaixo remonta os
+    campos nessa virada, para o `defaultValue` e o `autoFocus` valerem.
+  */
+  const remembered = useSyncExternalStore(
+    noSubscribe,
+    readRememberedEmail,
+    () => null,
+  );
+  const [remember, setRemember] = useState(true);
+
   return (
-    <form action={formAction} className="flex flex-col gap-5">
+    <form
+      action={formAction}
+      onSubmit={(e) => {
+        const email = new FormData(e.currentTarget).get("email");
+        if (remember && typeof email === "string" && email) {
+          rememberEmail(email);
+        } else {
+          forgetEmail();
+        }
+      }}
+      className="flex flex-col gap-5"
+      key={remembered ?? "sem-email"}
+    >
       <input type="hidden" name="destino" value={destino} />
 
       <Field label="E-mail">
@@ -23,8 +55,9 @@ export function LoginForm({ destino }: { destino: string }) {
             name="email"
             type="email"
             autoComplete="username"
+            defaultValue={remembered ?? ""}
             required
-            autoFocus
+            autoFocus={!remembered}
           />
         )}
       </Field>
@@ -37,9 +70,20 @@ export function LoginForm({ destino }: { destino: string }) {
             type="password"
             autoComplete="current-password"
             required
+            autoFocus={Boolean(remembered)}
           />
         )}
       </Field>
+
+      <label className="flex min-h-touch cursor-pointer items-center gap-3 text-sm text-ink-muted">
+        <input
+          type="checkbox"
+          checked={remember}
+          onChange={(e) => setRemember(e.target.checked)}
+          className="size-5 accent-[var(--color-ember-400)]"
+        />
+        Lembrar meu e-mail neste aparelho
+      </label>
 
       {state.error ? (
         <p

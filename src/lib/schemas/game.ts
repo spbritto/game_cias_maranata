@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isIsoDate } from "../lesson-date";
 import { conclusionSchema, stepDataSchema, type StepData } from "./step";
 import {
   conclusionDraftSchema,
@@ -29,6 +30,16 @@ export const gameInfoSchema = z.object({
   objective: optionalText(1200),
   mainScripture: optionalText(160),
   description: optionalText(2000),
+  /** Domingo da aula, "YYYY-MM-DD". Vazio vira null. */
+  lessonDate: z
+    .string()
+    .trim()
+    .refine((value) => value === "" || isIsoDate(value), {
+      error: "Data da aula inválida.",
+    })
+    .transform((value) => (value ? value : null)),
+  /** 1ª a 5ª aula do mês. */
+  lessonNumber: z.number().int().min(1).max(5).nullable(),
 });
 
 export type GameInfo = z.infer<typeof gameInfoSchema>;

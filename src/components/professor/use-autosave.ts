@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export type SaveStatus = "saved" | "dirty" | "saving" | "error";
+export type SaveStatus = "saved" | "dirty" | "saving" | "error" | "conflict";
+
+type SaveOutcome = { ok: boolean; error?: string; conflict?: boolean };
 
 /**
  * Autosave com atraso.
@@ -17,11 +19,13 @@ export type SaveStatus = "saved" | "dirty" | "saving" | "error";
  *    para o status não piscar "salvo" quando ainda há coisa por salvar;
  *  - se a própria chamada de rede falhar (não só a validação), mostra erro em
  *    vez de ficar presa em "Salvando..." para sempre;
- *  - expõe `retry()` para tentar de novo sem exigir uma nova edição.
+ *  - expõe `retry()` para tentar de novo sem exigir uma nova edição;
+ *  - em conflito (outro professor gravou antes), PARA de vez: tentar de novo
+ *    só repetiria a recusa, e a saída é recarregar a aula.
  */
 export function useAutosave<T>(
   value: T,
-  save: (value: T) => Promise<{ ok: boolean; error?: string }>,
+  save: (value: T) => Promise<SaveOutcome>,
   { delay = 900 }: { delay?: number } = {},
 ) {
   const [status, setStatus] = useState<SaveStatus>("saved");
@@ -31,6 +35,7 @@ export function useAutosave<T>(
   const mounted = useRef(false);
   const generation = useRef(0);
   const pending = useRef(false);
+  const conflicted = useRef(false);
   /**
    * `attempt()` sempre lê o valor mais recente, mesmo chamado fora do efeito
    * (por `retry()`, num clique). Atualizado dentro do efeito abaixo, nunca
@@ -40,13 +45,14 @@ export function useAutosave<T>(
   const valueRef = useRef(value);
 
   const attempt = useCallback(async () => {
+    if (conflicted.current) return;
     const mine = ++generation.current;
     setStatus("saving");
 
     // O try/catch importa: sem rede, ou com o servidor fora do ar, a chamada
     // rejeita em vez de devolver `{ ok: false }`. Sem isso a tela ficava presa
     // em "Salvando..." para sempre, sem nenhum aviso.
-    let result: { ok: boolean; error?: string };
+    let result: SaveOutcome;
     try {
       result = await save(valueRef.current);
     } catch {
@@ -64,6 +70,13 @@ export function useAutosave<T>(
       pending.current = false;
       setError(null);
       setStatus("saved");
+    } else if (result.conflict) {
+      conflicted.current = true;
+      // Sem isto o aviso de "sair da página?" travaria o próprio botão
+      // Recarregar, que é a única saída do conflito.
+      pending.current = false;
+      setError(result.error ?? "Outro professor alterou esta aula.");
+      setStatus("conflict");
     } else {
       setError(result.error ?? "Não consegui salvar.");
       setStatus("error");
@@ -77,6 +90,10 @@ export function useAutosave<T>(
       mounted.current = true;
       return;
     }
+
+    // Depois de um conflito o status fica congelado em "conflict": o aviso de
+    // recarregar não pode ser trocado por "Alterações pendentes".
+    if (conflicted.current) return;
 
     pending.current = true;
     setStatus("dirty");

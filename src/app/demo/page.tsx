@@ -19,6 +19,7 @@ export const metadata = { title: "Demonstração" };
 
 const demoGame: PlayableGame = {
   ...propositoGame,
+  lessonLabel: "4ª aula · 27 de setembro",
   slug: `demo-${PROPOSITO_SLUG}`,
   conclusion: propositoConclusion,
   steps: propositoSteps.map((data, i) => ({ id: `demo-${i}`, data })),

@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
   ArrowLeft,
+  CalendarDays,
   Check,
   Cloud,
   CloudOff,
@@ -34,6 +35,7 @@ import {
   type ConclusionDraft,
 } from "@/lib/schemas/step-draft";
 import type { StepType } from "@/lib/schemas/step";
+import { isIsoDate, isSunday, sundayOrdinal } from "@/lib/lesson-date";
 
 type Info = GameDraftRecord["info"];
 
@@ -58,6 +60,11 @@ export function GameEditor({ record }: { record: GameDraftRecord }) {
   const [publishing, startPublishing] = useTransition();
   const [togglingStatus, startTogglingStatus] = useTransition();
   const [statusError, setStatusError] = useState<string | null>(null);
+  /**
+   * Versão da aula que este editor conhece (trava otimista). Ref e não estado:
+   * muda a cada save e não deve re-renderizar nem disparar outro autosave.
+   */
+  const version = useRef(record.version);
 
   const draft = useMemo(
     () => ({ info, steps: steps.map((s) => ({ id: s.id, data: s.data })), conclusion }),
@@ -65,7 +72,13 @@ export function GameEditor({ record }: { record: GameDraftRecord }) {
   );
 
   const save = useCallback(
-    (value: typeof draft) => salvarJogoAction(record.id, value),
+    async (value: typeof draft) => {
+      const result = await salvarJogoAction(record.id, version.current, value);
+      if (result.ok && result.version !== undefined) {
+        version.current = result.version;
+      }
+      return result;
+    },
     [record.id],
   );
   const { status: saveStatus, error: saveError, retry: retrySave } = useAutosave(
@@ -86,7 +99,12 @@ export function GameEditor({ record }: { record: GameDraftRecord }) {
     setPublishError(null);
     startPublishing(async () => {
       try {
-        const result = await publicarJogoAction(record.id, draft);
+        const result = await publicarJogoAction(
+          record.id,
+          version.current,
+          draft,
+        );
+        if (result.version !== undefined) version.current = result.version;
         setPublishResult(result);
         if (result.ok && result.slug) {
           setSlug(result.slug);
@@ -134,7 +152,22 @@ export function GameEditor({ record }: { record: GameDraftRecord }) {
           </div>
         </div>
 
-        {saveError ? (
+        {saveStatus === "conflict" ? (
+          <div
+            role="alert"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-field border border-ember-500/50 bg-ember-500/10 px-4 py-3 text-sm text-ember-300"
+          >
+            <span>{saveError}</span>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="inline-flex min-h-touch items-center gap-1.5 font-semibold text-ink underline-offset-2 hover:underline"
+            >
+              <RefreshCw aria-hidden className="size-3.5" />
+              Recarregar
+            </button>
+          </div>
+        ) : saveError ? (
           <div
             role="alert"
             className="flex flex-wrap items-center justify-between gap-3 rounded-field border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300"
@@ -154,6 +187,12 @@ export function GameEditor({ record }: { record: GameDraftRecord }) {
 
       <section className="mt-8 flex flex-col gap-5">
         <h1 className="text-2xl font-semibold text-ink">A aula</h1>
+
+        <LessonWhen
+          lessonDate={info.lessonDate}
+          lessonNumber={info.lessonNumber}
+          onChange={(next) => setInfo({ ...info, ...next })}
+        />
 
         <Field label="Título do jogo">
           {(id) => (
@@ -433,6 +472,76 @@ export function GameEditor({ record }: { record: GameDraftRecord }) {
   );
 }
 
+/**
+ * Domingo + número da aula. Mudar a data recalcula o número (é o domingo do
+ * mês), mas o professor pode ajustar à mão — o material às vezes conta
+ * diferente, e o sistema não deve teimar.
+ */
+function LessonWhen({
+  lessonDate,
+  lessonNumber,
+  onChange,
+}: {
+  lessonDate: string;
+  lessonNumber: number | null;
+  onChange: (next: { lessonDate: string; lessonNumber: number | null }) => void;
+}) {
+  const valid = lessonDate !== "" && isIsoDate(lessonDate);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
+        <Field label="Domingo da aula">
+          {(id) => (
+            <TextInput
+              id={id}
+              type="date"
+              value={lessonDate}
+              onChange={(e) => {
+                const value = e.target.value;
+                onChange({
+                  lessonDate: value,
+                  lessonNumber:
+                    value && isIsoDate(value)
+                      ? sundayOrdinal(value)
+                      : lessonNumber,
+                });
+              }}
+            />
+          )}
+        </Field>
+        <Field label="Nº da aula">
+          {(id) => (
+            <Select
+              id={id}
+              value={lessonNumber ?? ""}
+              onChange={(e) =>
+                onChange({
+                  lessonDate,
+                  lessonNumber: e.target.value ? Number(e.target.value) : null,
+                })
+              }
+            >
+              <option value="">—</option>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <option key={n} value={n}>
+                  {n}ª aula
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+      </div>
+      {valid && !isSunday(lessonDate) ? (
+        <p className="flex items-center gap-1.5 text-xs text-ember-300">
+          <CalendarDays aria-hidden className="size-3.5 shrink-0" />
+          Essa data não cai num domingo.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function AddStep({
   onAdd,
   disabled,
@@ -470,13 +579,14 @@ function AddStep({
 function SaveIndicator({
   status,
 }: {
-  status: "saved" | "dirty" | "saving" | "error";
+  status: "saved" | "dirty" | "saving" | "error" | "conflict";
 }) {
   const map = {
     saved: { icon: Check, text: "Salvo", className: "text-ink-subtle" },
     dirty: { icon: Cloud, text: "Alterações pendentes", className: "text-ink-subtle" },
     saving: { icon: Loader2, text: "Salvando...", className: "text-ink-muted" },
     error: { icon: CloudOff, text: "Não salvou", className: "text-red-300" },
+    conflict: { icon: AlertTriangle, text: "Aula alterada por outra pessoa", className: "text-ember-300" },
   } as const;
 
   const { icon: Icon, text, className } = map[status];

@@ -5,7 +5,7 @@ import { KeyRound, Plus } from "lucide-react";
 import { Starfield } from "@/components/jogador/starfield";
 import { Button } from "@/components/professor/ui";
 import { GameList } from "@/components/professor/game-list";
-import { listGamesForTeacher } from "@/db/queries/teacher-games";
+import { canDeleteGame, listAllGames } from "@/db/queries/teacher-games";
 import { getCurrentTeacher } from "@/lib/auth";
 import { criarJogoAction, sairAction } from "../actions";
 
@@ -26,7 +26,7 @@ export default function PainelPage() {
         <header className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold tracking-[0.2em] text-ember-400 uppercase">
-              Suas aulas
+              Aulas da classe
             </p>
             <h1 className="mt-1 text-3xl font-semibold text-ink">Painel</h1>
           </div>
@@ -63,7 +63,8 @@ export default function PainelPage() {
 
 async function Games() {
   const teacher = await getCurrentTeacher();
-  const list = await listGamesForTeacher(teacher.id);
+  // Todos veem todas as aulas; só o botão de excluir depende de quem é.
+  const list = await listAllGames();
 
   if (list.length === 0) {
     return (
@@ -85,7 +86,14 @@ async function Games() {
     );
   }
 
-  return <GameList games={list} />;
+  return (
+    <GameList
+      games={list.map((game) => ({
+        ...game,
+        canDelete: canDeleteGame({ teacherId: game.authorId }, teacher.id),
+      }))}
+    />
+  );
 }
 
 function ListSkeleton() {

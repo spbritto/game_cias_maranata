@@ -1,13 +1,24 @@
 import "server-only";
-import { and, asc, count, desc, eq } from "drizzle-orm";
+import { asc, count, desc, eq, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { cacheLife, cacheTag } from "next/cache";
 import { db } from "@/db/client";
-import { games, steps, type GameStatus } from "@/db/schema";
+import { games, steps, teachers, type GameStatus } from "@/db/schema";
 import { toDraftConclusion, toDraftStep } from "@/lib/schemas/game";
 import type { ConclusionDraft, StepDraft } from "@/lib/schemas/step-draft";
 
-/** Tag do conjunto de jogos de um professor (lista do painel). */
-export const teacherGamesTag = (teacherId: string) => `teacher-games:${teacherId}`;
+/**
+ * Consultas da área do professor.
+ *
+ * As aulas são COMPARTILHADAS: qualquer professor logado vê, edita, publica,
+ * duplica e encerra qualquer aula — decisão de produto da rodada 2 (a gestão é
+ * coletiva, ver .claude/plans/PLANO_EXECUCAO.md seção 8). Por isso nada aqui
+ * filtra por professor. A única exceção é excluir, que continua com o autor e
+ * é checada na action com o `teacherId` devolvido por `findGame`.
+ */
+
+/** Tag da lista do painel — uma só, já que todos veem a mesma lista. */
+export const allGamesTag = "games:all";
 /** Tag de um jogo específico no editor. */
 export const gameDraftTag = (gameId: string) => `game-draft:${gameId}`;
 
@@ -18,22 +29,28 @@ export type GameSummary = {
   status: GameStatus;
   slug: string | null;
   stepCount: number;
+  lessonDate: string | null;
+  lessonNumber: number | null;
+  authorId: string | null;
+  authorName: string | null;
+  updatedByName: string | null;
   updatedAt: Date;
   publishedAt: Date | null;
 };
 
+const author = alias(teachers, "author");
+const editor = alias(teachers, "editor");
+
 /**
- * Lista do painel. Cacheada por professor e invalidada por `updateTag` a cada
- * mutação — o painel é a tela que ele abre mais vezes.
+ * Lista do painel, de todos os professores. Cacheada e invalidada por
+ * `updateTag(allGamesTag)` a cada mutação.
  *
- * Não exportar uma variante sem `teacherId`: é o argumento que garante que
- * ninguém veja jogo de outro professor.
+ * Ordem: aulas com data primeiro, do domingo mais recente para o mais antigo
+ * (o painel agrupa por mês); sem data por último, pela última edição.
  */
-export async function listGamesForTeacher(
-  teacherId: string,
-): Promise<GameSummary[]> {
+export async function listAllGames(): Promise<GameSummary[]> {
   "use cache";
-  cacheTag(teacherGamesTag(teacherId));
+  cacheTag(allGamesTag);
   cacheLife("minutes");
 
   return db
@@ -43,44 +60,49 @@ export async function listGamesForTeacher(
       theme: games.theme,
       status: games.status,
       slug: games.slug,
+      lessonDate: games.lessonDate,
+      lessonNumber: games.lessonNumber,
+      authorId: games.teacherId,
+      authorName: author.name,
+      updatedByName: editor.name,
       updatedAt: games.updatedAt,
       publishedAt: games.publishedAt,
       stepCount: count(steps.id),
     })
     .from(games)
     .leftJoin(steps, eq(steps.gameId, games.id))
-    .where(eq(games.teacherId, teacherId))
-    .groupBy(games.id)
-    .orderBy(desc(games.updatedAt));
+    .leftJoin(author, eq(author.id, games.teacherId))
+    .leftJoin(editor, eq(editor.id, games.updatedById))
+    .groupBy(games.id, author.name, editor.name)
+    .orderBy(sql`${games.lessonDate} desc nulls last`, desc(games.updatedAt));
 }
 
 export type GameDraftRecord = {
   id: string;
   status: GameStatus;
   slug: string | null;
+  /** Versão lida — o editor devolve a cada save (trava otimista). */
+  version: number;
+  authorId: string | null;
   info: {
     title: string;
     theme: string;
     objective: string;
     mainScripture: string;
     description: string;
+    /** "" quando sem data, para caber direto no `<input type="date">`. */
+    lessonDate: string;
+    lessonNumber: number | null;
   };
   steps: { id: string; data: StepDraft }[];
   conclusion: ConclusionDraft;
 };
 
-/**
- * Carrega um jogo para edição. Devolve null se não existir OU se não for do
- * professor — a diferença entre "não existe" e "não é seu" não deve vazar.
- */
+/** Carrega um jogo para edição ou prévia. Null se não existir. */
 export async function getGameDraft(
   gameId: string,
-  teacherId: string,
 ): Promise<GameDraftRecord | null> {
-  const [game] = await db
-    .select()
-    .from(games)
-    .where(and(eq(games.id, gameId), eq(games.teacherId, teacherId)));
+  const [game] = await db.select().from(games).where(eq(games.id, gameId));
 
   if (!game) return null;
 
@@ -94,12 +116,16 @@ export async function getGameDraft(
     id: game.id,
     status: game.status,
     slug: game.slug,
+    version: game.version,
+    authorId: game.teacherId,
     info: {
       title: game.title,
       theme: game.theme,
       objective: game.objective ?? "",
       mainScripture: game.mainScripture ?? "",
       description: game.description ?? "",
+      lessonDate: game.lessonDate ?? "",
+      lessonNumber: game.lessonNumber,
     },
     // Etapa que não casa nem com o esquema permissivo está corrompida de
     // verdade: some do editor em vez de impedir a abertura do jogo inteiro.
@@ -111,17 +137,29 @@ export async function getGameDraft(
   };
 }
 
-/** Só a dona da linha, para as ações verificarem posse antes de escrever. */
-export async function findOwnedGame(gameId: string, teacherId: string) {
+/** O mínimo que as actions precisam antes de escrever. */
+export async function findGame(gameId: string) {
   const [game] = await db
     .select({
       id: games.id,
+      teacherId: games.teacherId,
       status: games.status,
       slug: games.slug,
       theme: games.theme,
       title: games.title,
     })
     .from(games)
-    .where(and(eq(games.id, gameId), eq(games.teacherId, teacherId)));
+    .where(eq(games.id, gameId));
   return game ?? null;
+}
+
+/**
+ * Quem pode excluir: o autor, ou qualquer um se o autor já não existe (a aula
+ * ficaria sem ninguém capaz de apagá-la).
+ */
+export function canDeleteGame(
+  game: { teacherId: string | null },
+  teacherId: string,
+): boolean {
+  return game.teacherId === null || game.teacherId === teacherId;
 }

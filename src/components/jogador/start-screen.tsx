@@ -48,6 +48,15 @@ export function StartScreen({
           {game.theme}
         </p>
 
+        {game.lessonLabel ? (
+          <p
+            className="enter -mt-2 text-sm text-ink-subtle"
+            style={order(1)}
+          >
+            {game.lessonLabel}
+          </p>
+        ) : null}
+
         <h1
           className="enter text-4xl leading-tight font-semibold text-ink"
           style={order(2)}

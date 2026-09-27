@@ -3,7 +3,7 @@
 Documento derivado de [`descritivo_sistema_gamificacao_aulas_cristas.md`](descritivo_sistema_gamificacao_aulas_cristas.md).
 Este arquivo é o plano técnico; o descritivo continua sendo a fonte da verdade sobre **produto**.
 
-Última atualização: 2026-09-26
+Última atualização: 2026-09-27
 
 ---
 
@@ -16,6 +16,7 @@ Este arquivo é o plano técnico; o descritivo continua sendo a fonte da verdade
 | Framework | Next.js 16.3 (App Router) + React 19.2 | Necessário para preview de link no WhatsApp e cache de borda |
 | Cache | `cacheComponents: true` | Habilita `use cache` / `cacheTag`; ligado desde a Fase 0 |
 | Professores | Poucos | Login com senha; cadastro pela própria tela de login, atrás de código de convite (revisto em 2026-09-26, ver seção 8) |
+| Aulas | **Compartilhadas** entre todos os professores (rodada 2) | Qualquer professor vê/edita/publica/duplica/encerra; só o autor exclui; trava otimista por `game.version` |
 | Respostas dos adolescentes | **Não** são gravadas no MVP | Seção 16 do descritivo sai do escopo inicial |
 | Direção visual | Noturna / jornada | Índigo-violeta profundo + acento âmbar |
 
@@ -307,12 +308,28 @@ Conclusão ganha recap das respostas + botão "Mandar pro professor" (deep link 
 - [ ] Teste em 360px de largura — revisão estrutural feita (containers `max-w-md`/`max-w-2xl`, grids que colapsam por padrão), mas não visualizada num navegador real; ver seção 8
 - [ ] **Aula real com o jogo Propósito** — depende do Samuel, é o critério de sucesso da seção 24
 
+### Rodada 2 — melhorias pós-v1 (plano aprovado em 2026-09-27)
+
+Pedido do Samuel depois da primeira aula real. Três fases com checkpoint.
+
+**Fase A — login lembrado, aulas compartilhadas, domingo da aula** ✅ código pronto (não commitado — aguardando revisão)
+- [x] "Lembrar meu e-mail neste aparelho" no login (`localStorage`, só o e-mail); o cadastro também lembra
+- [x] Aulas compartilhadas: `listAllGames()`, `getGameDraft(id)` e `findGame(id)` sem filtro de dono; excluir só pelo autor (`canDeleteGame`), botão escondido para os outros
+- [x] Trava otimista: `game.version`, checada e incrementada no mesmo `UPDATE`; conflito para o autosave e pede recarga
+- [x] `game.lessonDate` / `game.lessonNumber`; nº = domingo do mês, calculado da data e ajustável; aula nova e cópia nascem no próximo domingo (fuso de Brasília)
+- [x] Painel agrupado por mês, selo "4ª aula · 27/09", autoria e último editor
+- [x] Tela de abertura do adolescente mostra "4ª aula · 27 de setembro"
+- [x] Migração `0001` aplicada no Neon
+
+**Fase B — criar aula a partir do PDF (OpenAI)** — pendente
+**Fase C — editor mais enxuto** — pendente
+
 ### Fora do MVP, por decisão
 | Item | Origem | Observação |
 |---|---|---|
 | Coleta de respostas + painel agregado | Seções 8.6 e 16 | Tabelas aditivas; nasce sem histórico |
 | Modo Aula (professor libera etapas) | Seção 15 | SSE ou polling de 3s; nada na arquitetura impede |
-| IA assistente de criação | Seção 18 | Server Action + provedor; schemas Zod já servem de contrato de saída |
+| ~~IA assistente de criação~~ | Seção 18 | **Entrou na rodada 2 (Fase B)** — gerar a aula a partir do PDF da aula escrita |
 | Templates e biblioteca pública | Seção 22 | `duplicar` já é a base |
 
 ---
@@ -346,6 +363,14 @@ professor conduz a discussão a partir da experiência
 ## 8. Registro de ajustes
 
 Mudanças feitas depois que o plano foi aprovado, com o motivo. O plano acima já está corrigido; esta seção existe para que a diferença não se perca.
+
+### 2026-09-27 — Rodada 2, Fase A (ainda não commitada)
+
+- **Aulas compartilhadas reverte o isolamento por professor da Fase 3.** Pedido explícito: "controle compartilhado". O que isso muda em segurança: qualquer pessoa com conta (ou seja, com o código de convite) edita qualquer aula. Excluir ficou com o autor por decisão do Samuel, porque apaga as missões sem volta.
+- **`game.teacher_id` passou de `cascade` para `set null`** (e virou nullable). Com aulas coletivas, apagar um professor levaria junto aulas que são de todos — exatamente o que já aconteceu uma vez (registro de 2026-09-26). Aula sem autor pode ser excluída por qualquer professor, senão ninguém mais conseguiria.
+- **Trava otimista não estava no pedido, mas é consequência direta dele.** O autosave grava o rascunho inteiro e apaga as etapas que não vieram; com duas pessoas na mesma aula, um editor desatualizado apagaria missões recém-criadas pela outra. A versão é conferida e incrementada no mesmo `UPDATE ... WHERE version = ?`, e as etapas só são tocadas se a linha voltar. Testado contra o Neon: duas gravações simultâneas com a mesma versão → exatamente uma passa. Encerrar/reabrir/publicar-status não mexem na versão (não são conteúdo).
+- **Data da aula como `date` em modo string**, não `timestamp`: é dia de calendário. O "próximo domingo" é calculado no fuso de Brasília, porque a Vercel roda em UTC e sábado à noite já seria domingo lá.
+- **As duas aulas que já existiam ficaram sem data** (aparecem em "Sem data" no painel) — basta abrir e escolher o domingo.
 
 ### 2026-09-26 — Alterar senha (ainda não commitado)
 

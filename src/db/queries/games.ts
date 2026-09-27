@@ -4,6 +4,7 @@ import { cacheLife, cacheTag } from "next/cache";
 import { db } from "@/db/client";
 import { games, steps, type GameStatus } from "@/db/schema";
 import type { PlayableGame } from "@/lib/game";
+import { lessonLabelLong } from "@/lib/lesson-date";
 import { conclusionSchema, stepDataSchema } from "@/lib/schemas/step";
 
 export type GameForPlay = {
@@ -34,6 +35,8 @@ export async function getGameBySlug(slug: string): Promise<GameForPlay | null> {
       theme: games.theme,
       description: games.description,
       mainScripture: games.mainScripture,
+      lessonDate: games.lessonDate,
+      lessonNumber: games.lessonNumber,
       status: games.status,
       conclusion: games.conclusion,
     })
@@ -77,6 +80,7 @@ export async function getGameBySlug(slug: string): Promise<GameForPlay | null> {
       theme: row.theme,
       description: row.description,
       mainScripture: row.mainScripture,
+      lessonLabel: lessonLabelLong(row.lessonNumber, row.lessonDate),
       steps: playableSteps,
       conclusion: conclusion.success ? conclusion.data : null,
     },

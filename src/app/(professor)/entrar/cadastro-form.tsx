@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 import { KeyRound, UserPlus } from "lucide-react";
 import { cadastrarAction, type CadastroState } from "../actions";
 import { Button, Field, TextInput } from "@/components/professor/ui";
+import { rememberEmail } from "@/lib/remembered-email";
 
 export function CadastroForm({ destino }: { destino: string }) {
   const [state, formAction] = useActionState<CadastroState, FormData>(
@@ -13,7 +14,15 @@ export function CadastroForm({ destino }: { destino: string }) {
   );
 
   return (
-    <form action={formAction} className="flex flex-col gap-5">
+    <form
+      action={formAction}
+      // Quem acabou de criar a conta já volta com o e-mail preenchido.
+      onSubmit={(e) => {
+        const email = new FormData(e.currentTarget).get("email");
+        if (typeof email === "string" && email) rememberEmail(email);
+      }}
+      className="flex flex-col gap-5"
+    >
       <input type="hidden" name="destino" value={destino} />
 
       <Field label="Nome">

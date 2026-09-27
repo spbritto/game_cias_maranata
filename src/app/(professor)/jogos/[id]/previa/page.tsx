@@ -7,6 +7,7 @@ import { GameRuntime } from "@/components/jogador/game-runtime";
 import { getGameDraft } from "@/db/queries/teacher-games";
 import { getCurrentTeacher } from "@/lib/auth";
 import type { PlayableGame } from "@/lib/game";
+import { lessonLabelLong } from "@/lib/lesson-date";
 import { conclusionSchema, stepDataSchema } from "@/lib/schemas/step";
 
 export const metadata: Metadata = { title: "Prévia" };
@@ -31,8 +32,9 @@ export default function PreviaPage({ params }: Props) {
 
 async function Preview({ params }: Props) {
   const { id } = await params;
-  const teacher = await getCurrentTeacher();
-  const record = await getGameDraft(id, teacher.id);
+  // Só para exigir sessão: a prévia é de qualquer aula, como o editor.
+  await getCurrentTeacher();
+  const record = await getGameDraft(id);
   if (!record) notFound();
 
   const ready = record.steps.flatMap((step) => {
@@ -49,6 +51,10 @@ async function Preview({ params }: Props) {
     theme: record.info.theme || "Prévia",
     description: record.info.description || null,
     mainScripture: record.info.mainScripture || null,
+    lessonLabel: lessonLabelLong(
+      record.info.lessonNumber,
+      record.info.lessonDate || null,
+    ),
     steps: ready,
     conclusion: conclusion.success ? conclusion.data : null,
   };

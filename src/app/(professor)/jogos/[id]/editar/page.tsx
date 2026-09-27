@@ -23,11 +23,11 @@ export default function EditarPage({ params }: Props) {
 
 async function Editor({ params }: Props) {
   const { id } = await params;
-  const teacher = await getCurrentTeacher();
+  // Sessão exigida mesmo sem filtrar por dono: as aulas são compartilhadas
+  // entre professores, mas continuam fechadas para quem não entrou.
+  await getCurrentTeacher();
 
-  // `getGameDraft` já filtra por professor: jogo de outra pessoa volta null e
-  // some como "não encontrado", sem revelar que existe.
-  const draft = await getGameDraft(id, teacher.id);
+  const draft = await getGameDraft(id);
   if (!draft) notFound();
 
   return <GameEditor record={draft} />;

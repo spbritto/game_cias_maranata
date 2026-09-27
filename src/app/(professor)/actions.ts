@@ -8,9 +8,10 @@ import { db } from "@/db/client";
 import { games, steps, teachers } from "@/db/schema";
 import { findTeacherByEmail } from "@/db/queries/teachers";
 import {
-  findOwnedGame,
+  allGamesTag,
+  canDeleteGame,
+  findGame,
   gameDraftTag,
-  teacherGamesTag,
 } from "@/db/queries/teacher-games";
 import { gameTag } from "@/db/queries/games";
 import { requireTeacher } from "@/lib/auth";
@@ -25,11 +26,16 @@ import {
 } from "@/lib/schemas/game";
 import type { ConclusionDraft } from "@/lib/schemas/step-draft";
 import { buildGameSlug } from "@/lib/slug";
+import { nextSunday, sundayOrdinal, todayInBrazil } from "@/lib/lesson-date";
 
 /**
- * Toda ação relê a sessão por `requireTeacher()` e confere a posse do jogo
- * antes de escrever. Nenhuma confia no id que o cliente mandou — é o que
- * impede alguém logado de editar jogo de outro professor trocando a URL.
+ * Toda ação relê a sessão por `requireTeacher()` antes de escrever — nenhuma
+ * confia em quem o cliente diz ser.
+ *
+ * As aulas são compartilhadas entre todos os professores (rodada 2): qualquer
+ * professor logado edita, publica, encerra e duplica qualquer aula. Só excluir
+ * continua restrito ao autor (`canDeleteGame`). Com várias pessoas na mesma
+ * aula, a gravação de conteúdo usa trava otimista por `game.version`.
  */
 
 // --- sessão ---------------------------------------------------------------
@@ -233,6 +239,12 @@ export async function alterarSenhaAction(
 
 // --- jogos ----------------------------------------------------------------
 
+/** Data e número de uma aula nova: o próximo domingo, em Brasília. */
+function upcomingLesson() {
+  const lessonDate = nextSunday(todayInBrazil());
+  return { lessonDate, lessonNumber: sundayOrdinal(lessonDate) };
+}
+
 export async function criarJogoAction(): Promise<void> {
   const teacher = await requireTeacher();
 
@@ -240,36 +252,55 @@ export async function criarJogoAction(): Promise<void> {
     .insert(games)
     .values({
       teacherId: teacher.id,
+      updatedById: teacher.id,
       title: "Nova aula",
       theme: "",
       conclusion: null,
       status: "draft",
+      ...upcomingLesson(),
     })
     .returning({ id: games.id });
 
-  updateTag(teacherGamesTag(teacher.id));
+  updateTag(allGamesTag);
   redirect(`/jogos/${game.id}/editar`);
 }
 
-export type SaveResult = { ok: boolean; savedAt: number; error?: string };
+export type SaveResult = {
+  ok: boolean;
+  savedAt: number;
+  /** Versão depois desta gravação — o editor passa a mandar esta. */
+  version?: number;
+  /** Outro professor gravou antes: o editor para de salvar e pede recarga. */
+  conflict?: boolean;
+  error?: string;
+};
+
+const CONFLICT_MESSAGE =
+  "Outro professor salvou alterações nesta aula enquanto você editava. Recarregue para ver a versão atual — o que você digitou por último não foi gravado.";
 
 /**
  * Autosave do editor. Recebe o rascunho inteiro — um jogo tem alguns kB, e
  * mandar tudo evita todo o aparato de diff por campo.
+ *
+ * `expectedVersion` é a versão que o editor leu. Se outro professor gravou
+ * nesse meio-tempo, a versão no banco já é outra e NADA é gravado: como o
+ * rascunho inteiro substitui o que existe (inclusive apagando etapas que não
+ * vieram), gravar por cima faria sumir o trabalho da outra pessoa.
  */
 export async function salvarJogoAction(
   gameId: string,
+  expectedVersion: number,
   payload: unknown,
 ): Promise<SaveResult> {
   const teacher = await requireTeacher();
 
-  const owned = await findOwnedGame(gameId, teacher.id);
-  if (!owned) {
-    return { ok: false, savedAt: Date.now(), error: "Jogo não encontrado." };
+  const found = await findGame(gameId);
+  if (!found) {
+    return { ok: false, savedAt: Date.now(), error: "Aula não encontrada." };
   }
 
   const parsed = gameDraftSchema.safeParse(payload);
-  if (!parsed.success) {
+  if (!parsed.success || !Number.isInteger(expectedVersion)) {
     return {
       ok: false,
       savedAt: Date.now(),
@@ -279,7 +310,13 @@ export async function salvarJogoAction(
 
   const draft = parsed.data;
 
-  await db
+  /*
+    A checagem e o incremento da versão são o mesmo UPDATE, então duas
+    gravações simultâneas não passam as duas: o Postgres trava a linha e a
+    segunda já não encontra a versão esperada. As etapas só são tocadas depois
+    que esta linha voltou.
+  */
+  const [updated] = await db
     .update(games)
     .set({
       title: draft.info.title,
@@ -287,10 +324,24 @@ export async function salvarJogoAction(
       objective: draft.info.objective,
       mainScripture: draft.info.mainScripture,
       description: draft.info.description,
+      lessonDate: draft.info.lessonDate,
+      lessonNumber: draft.info.lessonNumber,
       conclusion: conclusionForStorage(draft.conclusion),
+      updatedById: teacher.id,
+      version: sql`${games.version} + 1`,
       updatedAt: new Date(),
     })
-    .where(eq(games.id, gameId));
+    .where(and(eq(games.id, gameId), eq(games.version, expectedVersion)))
+    .returning({ version: games.version });
+
+  if (!updated) {
+    return {
+      ok: false,
+      conflict: true,
+      savedAt: Date.now(),
+      error: CONFLICT_MESSAGE,
+    };
+  }
 
   /*
     Ids das etapas são gerados no cliente e nunca mudam depois de criados: é o
@@ -330,30 +381,33 @@ export async function salvarJogoAction(
     );
 
   updateTag(gameDraftTag(gameId));
-  updateTag(teacherGamesTag(teacher.id));
+  updateTag(allGamesTag);
   // Editar jogo publicado tem efeito imediato no link já compartilhado.
-  if (owned.slug) revalidateTag(gameTag(owned.slug), "max");
+  if (found.slug) revalidateTag(gameTag(found.slug), "max");
 
-  return { ok: true, savedAt: Date.now() };
+  return { ok: true, savedAt: Date.now(), version: updated.version };
 }
 
 export type PublishResult = {
   ok: boolean;
   slug?: string;
+  version?: number;
+  conflict?: boolean;
   problems?: PublishProblem[];
 };
 
 export async function publicarJogoAction(
   gameId: string,
+  expectedVersion: number,
   payload: unknown,
 ): Promise<PublishResult> {
-  const teacher = await requireTeacher();
+  await requireTeacher();
 
-  const owned = await findOwnedGame(gameId, teacher.id);
-  if (!owned) {
+  const found = await findGame(gameId);
+  if (!found) {
     return {
       ok: false,
-      problems: [{ step: null, message: "Jogo não encontrado." }],
+      problems: [{ step: null, message: "Aula não encontrada." }],
     };
   }
 
@@ -371,19 +425,23 @@ export async function publicarJogoAction(
   const problems = findPublishProblems(draft);
   if (problems.length) return { ok: false, problems };
 
-  // Grava o rascunho antes, para publicado e editor nunca divergirem.
-  const saved = await salvarJogoAction(gameId, payload);
+  // Grava o rascunho antes, para publicado e editor nunca divergirem. Passa
+  // pela mesma trava de versão do autosave.
+  const saved = await salvarJogoAction(gameId, expectedVersion, payload);
   if (!saved.ok) {
     return {
       ok: false,
+      conflict: saved.conflict,
       problems: [{ step: null, message: saved.error ?? "Falha ao salvar." }],
     };
   }
 
   // Slug nasce na primeira publicação e nunca muda: link já compartilhado no
   // grupo não pode quebrar porque o professor renomeou o tema.
-  const slug = owned.slug ?? buildGameSlug(draft.info.theme || draft.info.title);
+  const slug = found.slug ?? buildGameSlug(draft.info.theme || draft.info.title);
 
+  // Status não é conteúdo: não mexe em `version`, senão o próprio editor que
+  // publicou esbarraria em conflito no próximo autosave.
   await db
     .update(games)
     .set({
@@ -404,47 +462,44 @@ export async function publicarJogoAction(
   }
 
   updateTag(gameDraftTag(gameId));
-  updateTag(teacherGamesTag(teacher.id));
+  updateTag(allGamesTag);
   revalidateTag(gameTag(slug), "max");
 
-  return { ok: true, slug };
+  return { ok: true, slug, version: saved.version };
 }
 
 export async function encerrarJogoAction(gameId: string): Promise<void> {
-  const teacher = await requireTeacher();
-  const owned = await findOwnedGame(gameId, teacher.id);
-  if (!owned) return;
+  await requireTeacher();
+  const found = await findGame(gameId);
+  if (!found) return;
 
   await db
     .update(games)
     .set({ status: "closed", updatedAt: new Date() })
     .where(eq(games.id, gameId));
 
-  updateTag(teacherGamesTag(teacher.id));
-  if (owned.slug) revalidateTag(gameTag(owned.slug), "max");
+  updateTag(allGamesTag);
+  if (found.slug) revalidateTag(gameTag(found.slug), "max");
 }
 
 export async function reabrirJogoAction(gameId: string): Promise<void> {
-  const teacher = await requireTeacher();
-  const owned = await findOwnedGame(gameId, teacher.id);
-  if (!owned?.slug) return;
+  await requireTeacher();
+  const found = await findGame(gameId);
+  if (!found?.slug) return;
 
   await db
     .update(games)
     .set({ status: "published", updatedAt: new Date() })
     .where(eq(games.id, gameId));
 
-  updateTag(teacherGamesTag(teacher.id));
-  revalidateTag(gameTag(owned.slug), "max");
+  updateTag(allGamesTag);
+  revalidateTag(gameTag(found.slug), "max");
 }
 
 export async function duplicarJogoAction(gameId: string): Promise<void> {
   const teacher = await requireTeacher();
 
-  const [original] = await db
-    .select()
-    .from(games)
-    .where(and(eq(games.id, gameId), eq(games.teacherId, teacher.id)));
+  const [original] = await db.select().from(games).where(eq(games.id, gameId));
   if (!original) return;
 
   const originalSteps = await db
@@ -452,11 +507,13 @@ export async function duplicarJogoAction(gameId: string): Promise<void> {
     .from(steps)
     .where(eq(steps.gameId, gameId));
 
-  // Cópia nasce rascunho e sem slug: publicar de novo gera link próprio.
+  // Cópia nasce rascunho e sem slug: publicar de novo gera link próprio. É de
+  // quem duplicou, e vai para o próximo domingo — cópia é para dar de novo.
   const [copy] = await db
     .insert(games)
     .values({
       teacherId: teacher.id,
+      updatedById: teacher.id,
       title: `${original.title} (cópia)`,
       theme: original.theme,
       objective: original.objective,
@@ -466,6 +523,7 @@ export async function duplicarJogoAction(gameId: string): Promise<void> {
       status: "draft",
       slug: null,
       publishedAt: null,
+      ...upcomingLesson(),
     })
     .returning({ id: games.id });
 
@@ -482,20 +540,27 @@ export async function duplicarJogoAction(gameId: string): Promise<void> {
     );
   }
 
-  updateTag(teacherGamesTag(teacher.id));
+  updateTag(allGamesTag);
   redirect(`/jogos/${copy.id}/editar`);
 }
 
+/** Único poder que não é compartilhado: só o autor exclui. */
 export async function excluirJogoAction(gameId: string): Promise<void> {
   const teacher = await requireTeacher();
-  const owned = await findOwnedGame(gameId, teacher.id);
-  if (!owned) return;
+  const found = await findGame(gameId);
+  if (!found) return;
+
+  if (!canDeleteGame(found, teacher.id)) {
+    // O botão nem aparece para quem não é o autor; chegar aqui é chamada
+    // forjada, e o painel mostra o erro genérico.
+    throw new Error("Só quem criou a aula pode excluí-la.");
+  }
 
   // As etapas vão junto pelo cascade do schema.
   await db.delete(games).where(eq(games.id, gameId));
 
-  updateTag(teacherGamesTag(teacher.id));
-  if (owned.slug) revalidateTag(gameTag(owned.slug), "max");
+  updateTag(allGamesTag);
+  if (found.slug) revalidateTag(gameTag(found.slug), "max");
   redirect("/painel");
 }
 

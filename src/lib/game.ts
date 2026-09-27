@@ -21,6 +21,8 @@ export type PlayableGame = {
   theme: string;
   description: string | null;
   mainScripture: string | null;
+  /** "4ª aula · 27 de setembro", ou null quando a aula não tem data. */
+  lessonLabel: string | null;
   steps: PlayableStep[];
   conclusion: Conclusion | null;
 };

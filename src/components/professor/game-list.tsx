@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
+  CalendarDays,
   Check,
   Copy,
   ExternalLink,
@@ -16,6 +17,7 @@ import {
 import { Button, StatusBadge } from "./ui";
 import type { GameSummary } from "@/db/queries/teacher-games";
 import { useOrigin } from "@/lib/use-origin";
+import { lessonLabel, monthKey, monthLabel } from "@/lib/lesson-date";
 import {
   duplicarJogoAction,
   encerrarJogoAction,
@@ -25,19 +27,58 @@ import {
 
 const GENERIC_ERROR = "Algo deu errado. Tente de novo em instantes.";
 
-export function GameList({ games }: { games: GameSummary[] }) {
+export type GameListItem = GameSummary & { canDelete: boolean };
+
+type Group = { key: string; label: string; games: GameListItem[] };
+
+/**
+ * Agrupa por mês do domingo da aula. A lista já chega ordenada (domingo mais
+ * recente primeiro, sem data por último), então basta cortar nas viradas.
+ */
+function groupByMonth(games: GameListItem[]): Group[] {
+  const groups: Group[] = [];
+  for (const game of games) {
+    const key = game.lessonDate ? monthKey(game.lessonDate) : "sem-data";
+    let group = groups.at(-1);
+    if (!group || group.key !== key) {
+      group = {
+        key,
+        label: game.lessonDate ? monthLabel(game.lessonDate) : "Sem data",
+        games: [],
+      };
+      groups.push(group);
+    }
+    group.games.push(game);
+  }
+  return groups;
+}
+
+export function GameList({ games }: { games: GameListItem[] }) {
   return (
-    <ul className="flex flex-col gap-3">
-      {games.map((game) => (
-        <li key={game.id}>
-          <GameRow game={game} />
-        </li>
+    <div className="flex flex-col gap-8">
+      {groupByMonth(games).map((group) => (
+        <section key={group.key} aria-labelledby={`mes-${group.key}`}>
+          <h2
+            id={`mes-${group.key}`}
+            className="mb-3 text-sm font-semibold tracking-[0.14em] text-ink-muted uppercase"
+          >
+            {group.label}
+          </h2>
+          <ul className="flex flex-col gap-3">
+            {group.games.map((game) => (
+              <li key={game.id}>
+                <GameRow game={game} />
+              </li>
+            ))}
+          </ul>
+        </section>
       ))}
-    </ul>
+    </div>
   );
 }
 
-function GameRow({ game }: { game: GameSummary }) {
+function GameRow({ game }: { game: GameListItem }) {
+  const when = lessonLabel(game.lessonNumber, game.lessonDate);
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -62,16 +103,23 @@ function GameRow({ game }: { game: GameSummary }) {
     <article className="rounded-card border border-line bg-surface-raised p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
+          {when ? (
+            <p className="mb-1.5 inline-flex items-center gap-1.5 rounded-pill border border-ember-500/40 bg-ember-500/10 px-2.5 py-0.5 text-xs font-semibold text-ember-300">
+              <CalendarDays aria-hidden className="size-3.5" />
+              {when}
+            </p>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-semibold text-ink">
+            <h3 className="text-lg font-semibold text-ink">
               {game.title || "Sem título"}
-            </h2>
+            </h3>
             <StatusBadge status={game.status} />
           </div>
           <p className="mt-1 text-sm text-ink-subtle">
             {game.theme || "Sem tema"} ·{" "}
             {game.stepCount === 1 ? "1 missão" : `${game.stepCount} missões`}
           </p>
+          <Authorship game={game} />
         </div>
 
         <button
@@ -128,7 +176,9 @@ function GameRow({ game }: { game: GameSummary }) {
               </Button>
             ) : null}
 
-            <DeleteButton game={game} pending={pending} run={run} />
+            {game.canDelete ? (
+              <DeleteButton game={game} pending={pending} run={run} />
+            ) : null}
           </div>
 
           {error ? (
@@ -144,6 +194,18 @@ function GameRow({ game }: { game: GameSummary }) {
       ) : null}
     </article>
   );
+}
+
+/** "por Ana · editada por Bruno" — com aulas compartilhadas, vale saber. */
+function Authorship({ game }: { game: GameListItem }) {
+  const parts: string[] = [];
+  if (game.authorName) parts.push(`por ${game.authorName}`);
+  if (game.updatedByName && game.updatedByName !== game.authorName) {
+    parts.push(`editada por último por ${game.updatedByName}`);
+  }
+  if (!parts.length) return null;
+
+  return <p className="mt-0.5 text-xs text-ink-subtle">{parts.join(" · ")}</p>;
 }
 
 function ShareLink({ slug }: { slug: string }) {
